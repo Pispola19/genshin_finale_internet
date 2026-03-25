@@ -1,0 +1,18 @@
+# Blueprint Render.com — Genshin Manager (deploy pubblico)
+# Dashboard: New Blueprint dal repo, oppure Web Service manuale con gli stessi comandi.
+# Dati persistenti: aggiungi un Disco, montalo (es. /var/data) e imposta GINSHIN_DATA_DIR.
+services:
+  - type: web
+    name: genshin-finale-internet-25
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn web.app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: SECRET_KEY
+        generateValue: true
+      # Opzionale: disco persistente Render
+      # - key: GINSHIN_DATA_DIR
+      #   value: /var/data

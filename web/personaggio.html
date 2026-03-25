@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="api-base" content="/api">
+  <title>Personaggio — Genshin Manager</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page-bg page-bg-personaggio">
+  <nav class="app-nav" aria-label="Navigazione principale">
+    <div class="nav-pages">
+      <a href="personaggio.html" class="active">Personaggio</a>
+      <a href="artefatti.html">Manufatti</a>
+      <a href="build.html">Build Analysis</a>
+      <a href="team.html">Team Builder</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="istruzioni.html">Come si usa</a>
+      <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
+    </div>
+  </nav>
+
+  <aside class="app-notice app-notice-dps" role="note">
+    <span class="app-notice-text"><strong>DPS (Build / Dashboard):</strong> conta solo i manufatti assegnati in <a href="artefatti.html">Manufatti</a>. Le stat che compili qui <strong>non</strong> entrano nel calcolo DPS degli artefatti senza pezzi equipaggiati.</span>
+    <a class="app-notice-link" href="istruzioni.html#dps-e-manufatti">Come si usa</a>
+  </aside>
+
+  <div class="page-personaggio">
+    <main class="personaggio-main">
+      <div class="section section-autocomplete">
+        <h2>🔍 Seleziona Personaggio</h2>
+        <div class="form-row">
+          <div class="autocomplete-wrap">
+            <input type="text" id="searchPersonaggio" placeholder="Cerca nome o apri l’elenco…" autocomplete="off">
+            <ul class="autocomplete-list" id="autocompleteList" style="display:none"></ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Dati base</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nome</label>
+            <input type="text" id="nome" placeholder="Nome">
+          </div>
+          <div class="form-group">
+            <label>Livello</label>
+            <input type="number" id="livello" min="1" max="90" value="1">
+          </div>
+          <div class="form-group">
+            <label>Elemento</label>
+            <select id="elemento">
+              <option>Pyro</option><option>Hydro</option><option>Electro</option>
+              <option>Cryo</option><option>Anemo</option><option>Geo</option><option>Dendro</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="section section-stats-personaggio">
+        <h2>Stats</h2>
+        <div class="form-row">
+          <div class="form-group"><label>HP</label><input type="number" id="hp_flat" placeholder="—"></div>
+          <div class="form-group"><label>ATK</label><input type="number" id="atk_flat" placeholder="—"></div>
+          <div class="form-group"><label>DEF</label><input type="number" id="def_flat" placeholder="—"></div>
+          <div class="form-group"><label>EM</label><input type="number" id="em_flat" placeholder="—"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>CR</label><input type="number" id="cr" placeholder="—"></div>
+          <div class="form-group"><label>CD</label><input type="number" id="cd" placeholder="—"></div>
+          <div class="form-group"><label>ER</label><input type="number" id="er" placeholder="—"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Arma</h2>
+        <div class="table-scroll">
+        <table class="arma-table">
+          <tr>
+            <th>Nome</th><th>Tipo</th><th>Liv</th><th>★</th><th>Stat</th><th>Val</th>
+          </tr>
+          <tr>
+            <td><input type="text" id="arma_nome" placeholder="Nome arma"></td>
+            <td>
+              <select id="arma_tipo">
+                <option>Claymore</option><option>Spada</option><option>Arco</option>
+                <option>Catalizzatore</option><option>Lancia</option>
+              </select>
+            </td>
+            <td><input type="number" id="arma_livello" min="1" style="width:60px"></td>
+            <td><input type="number" id="arma_stelle" min="1" max="5" style="width:50px"></td>
+            <td><input type="text" id="arma_stat" placeholder="Stat"></td>
+            <td><input type="number" id="arma_valore" placeholder="Val"></td>
+          </tr>
+        </table>
+        </div>
+      </div>
+
+      <div class="section section-manufatti-readonly">
+        <h2>Manufatti equipaggiati</h2>
+        <p class="page-hint page-hint-oneline">Solo lettura — equip reale = <a href="artefatti.html">Manufatti</a>; Salva qui non sposta i pezzi; DPS Build usa i manufatti, non queste caselle da sole.</p>
+        <div class="artefatti-grid manufatti-grid" aria-label="Manufatti equipaggiati (sola lettura)">
+          <div class="art-slot art-slot-readonly">
+            <h3>Fiore</h3>
+            <div id="art_fiore" class="art-content"><span class="art-empty">Nessun manufatto</span></div>
+          </div>
+          <div class="art-slot art-slot-readonly">
+            <h3>Piuma</h3>
+            <div id="art_piuma" class="art-content"><span class="art-empty">Nessun manufatto</span></div>
+          </div>
+          <div class="art-slot art-slot-readonly">
+            <h3>Sabbie</h3>
+            <div id="art_sabbie" class="art-content"><span class="art-empty">Nessun manufatto</span></div>
+          </div>
+          <div class="art-slot art-slot-readonly">
+            <h3>Calice</h3>
+            <div id="art_calice" class="art-content"><span class="art-empty">Nessun manufatto</span></div>
+          </div>
+          <div class="art-slot art-slot-readonly">
+            <h3>Corona</h3>
+            <div id="art_corona" class="art-content"><span class="art-empty">Nessun manufatto</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Costellazioni e talenti</h2>
+        <p class="page-hint">Costellazioni: <strong>0</strong> = non attiva, <strong>1</strong> = attiva. Talenti: <strong>-</strong> (vuoto), <strong>0</strong> o <strong>1–10</strong> (livello). Prime tre: AA, E, Q. Extra 1–4: <strong>non nel calcolo DPS</strong> (solo appunti).</p>
+        <div class="form-row talenti-cost-row">
+          <div class="form-group cost-picker"><label>C1</label><select id="c1"><option value="0">0</option><option value="1">1</option></select></div>
+          <div class="form-group cost-picker"><label>C2</label><select id="c2"><option value="0">0</option><option value="1">1</option></select></div>
+          <div class="form-group cost-picker"><label>C3</label><select id="c3"><option value="0">0</option><option value="1">1</option></select></div>
+          <div class="form-group cost-picker"><label>C4</label><select id="c4"><option value="0">0</option><option value="1">1</option></select></div>
+          <div class="form-group cost-picker"><label>C5</label><select id="c5"><option value="0">0</option><option value="1">1</option></select></div>
+          <div class="form-group cost-picker"><label>C6</label><select id="c6"><option value="0">0</option><option value="1">1</option></select></div>
+        </div>
+        <div class="talenti-grid-web">
+          <div class="form-group"><label>Attacco (AA)</label><input type="text" id="aa" class="talento-input" value="-" maxlength="3" inputmode="numeric" pattern="[\-0-9]*" autocomplete="off"></div>
+          <div class="form-group"><label>Abilità (E)</label><input type="text" id="skill" class="talento-input" value="-" maxlength="3" inputmode="numeric" pattern="[\-0-9]*" autocomplete="off"></div>
+          <div class="form-group"><label>Tripudio (Q)</label><input type="text" id="burst" class="talento-input" value="-" maxlength="3" inputmode="numeric" pattern="[\-0-9]*" autocomplete="off"></div>
+          <div class="form-group"><label>Extra 1 (no DPS)</label><input type="text" id="pas1" class="talento-input" value="-" maxlength="3" inputmode="numeric" pattern="[\-0-9]*" autocomplete="off"></div>
+          <div class="form-group"><label>Extra 2 (no DPS)</label><input type="text" id="pas2" class="talento-input" value="-" maxlength="3" inputmode="numeric" pattern="[\-0-9]*" autocomplete="off"></div>
+          <div class="form-group"><label>Extra 3 (no DPS)</label><input type="text" id="pas3" class="talento-input" value="-" maxlength="3" inputmode="numeric" pattern="[\-0-9]*" autocomplete="off"></div>
+          <div class="form-group"><label>Extra 4 (no DPS)</label><input type="text" id="pas4" class="talento-input" value="-" maxlength="3" inputmode="numeric" pattern="[\-0-9]*" autocomplete="off"></div>
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-primary" id="btnNuovo">NUOVO</button>
+        <button class="btn btn-primary" id="btnSalva">SALVA</button>
+        <button class="btn btn-secondary" id="btnCancella">CANCELLA</button>
+      </div>
+    </main>
+
+  </div>
+
+  <script src="js/personaggio.js"></script>
+</body>
+</html>

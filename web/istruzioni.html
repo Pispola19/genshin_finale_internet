@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Come si usa — Genshin Manager</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page-bg page-bg-istruzioni">
+  <nav class="app-nav" aria-label="Navigazione principale">
+    <div class="nav-pages">
+      <a href="personaggio.html">Personaggio</a>
+      <a href="artefatti.html">Manufatti</a>
+      <a href="build.html">Build Analysis</a>
+      <a href="team.html">Team Builder</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="istruzioni.html" class="active">Come si usa</a>
+      <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
+    </div>
+  </nav>
+
+  <aside class="app-notice app-notice-dps" role="note">
+    <span class="app-notice-text"><strong>DPS (Build / Dashboard)</strong> = manufatti assegnati al personaggio in Manufatti. Le statistiche sulla scheda Personaggio <strong>non</strong> sostituiscono i pezzi mancanti.</span>
+    <a class="app-notice-link" href="#dps-e-manufatti">Leggi sotto</a>
+  </aside>
+
+  <main class="page-personaggio">
+    <div class="section istruzioni-card" style="max-width: 52rem; margin: 1.25rem auto;">
+      <h1>Come si usa</h1>
+      <p class="page-hint" style="font-size:1.05rem;line-height:1.65">
+        Questa app è un <strong>quaderno</strong> per <strong>Genshin Impact</strong>: salvi i tuoi personaggi, le armi e i <strong>manufatti</strong> (i pezzi di set) in ordine, un po’ come nel gioco.
+        Qui sotto trovi le regole attuali, scritte in modo semplice.
+      </p>
+
+      <h2>Due posti diversi (importante)</h2>
+      <ul style="line-height:1.65;margin-left:1.2rem">
+        <li><strong><a href="personaggio.html">Personaggio</a></strong> — scheda dell’eroe: nome, livello, stats foglio, arma, costellazioni, talenti. I <strong>manufatti</strong> qui sono solo in <strong>lettura</strong> (cosa risulta assegnato nel database). <strong>Salva</strong> non sposta più i pezzi tra magazzino ed equip.</li>
+        <li><strong><a href="artefatti.html">Manufatti</a></strong> — magazzino: registri ogni pezzo, lo modifichi, lo <strong>assegni a una scheda personaggio</strong> o lo lasci <strong>libero</strong> dal menu nel riquadro blu <em>Assegnazione al personaggio</em>. È l’<strong>unico</strong> posto per equipaggiare o togliere un pezzo da un PG.</li>
+      </ul>
+
+      <h2 id="dps-e-manufatti">DPS e manufatti (da ricordare)</h2>
+      <p>Il <strong>DPS indicativo</strong> in <strong>Build Analysis</strong> e <strong>Dashboard</strong> viene calcolato solo dalle statistiche dei <strong>manufatti equipaggiati</strong> (quelli con il tuo personaggio selezionato in Manufatti). Le caselle HP, ATK, CR, CD, ecc. sulla scheda Personaggio <strong>non</strong> vengono sommate nel calcolo “artefatti” dell’app: servono come appunti o per altri usi futuri.</p>
+      <p class="page-hint">Quindi: anche se salvi il personaggio con tutte le stat compilate, <strong>senza manufatti assegnati</strong> il DPS da build resta basso o non rappresenta un set completo. Assegna i cinque slot da <a href="artefatti.html">Manufatti</a>.</p>
+
+      <h2>Personaggio — ricerca e salvataggio</h2>
+      <p class="page-hint" style="margin-bottom:0.85rem">Nella casella <strong>Seleziona Personaggio</strong> trovi l’elenco nomi Genshin (Hoyolab) più le schede che salvi: dopo <strong>Salva</strong> il database si aggiorna e il nome compare come <strong>Salvato</strong>; <strong>Nuovo</strong> prepara una scheda vuota.</p>
+
+      <h2>Personaggio — passo passo</h2>
+      <ol style="line-height:1.65;margin-left:1.2rem">
+        <li>Cerca il nome (catalogo + schede salvate).</li>
+        <li>Compila livello, <strong>elemento</strong>, statistiche foglio, <strong>arma</strong>, costellazioni, talenti.</li>
+        <li>Scorri i cinque slot manufatti: vedi cosa è equipaggiato (dati reali da Manufatti). Per cambiare qualcosa apri <a href="artefatti.html">Manufatti</a>.</li>
+        <li><strong>SALVA</strong> la scheda personaggio per nome, arma, stats, ecc.</li>
+      </ol>
+
+      <h2 id="manufatti-magazzino">Manufatti — magazzino</h2>
+      <ul style="line-height:1.65;margin-left:1.2rem">
+        <li><strong>AGGIUNGI</strong> — nuovo pezzo: slot, set, nome, main, sub; nel riquadro blu scegli <strong>Solo magazzino</strong> o un <strong>personaggio</strong> (equip nello stesso slot).</li>
+        <li><strong>Carica nel modulo</strong> sulla riga — riempie il modulo per modificare; <strong>SALVA MODIFICHE</strong> applica; <strong>Elimina</strong> se serve togliere il record.</li>
+        <li><strong>Clic sulla riga</strong> (fuori dal pulsante) — dettaglio e suggerimento “a chi potrebbe convenire” (punteggio semplificato).</li>
+        <li>Pezzo <strong>già su un PG</strong>: non puoi cambiare lo <strong>slot</strong> finché è assegnato; per liberarlo metti <strong>Solo magazzino</strong> e salva.</li>
+      </ul>
+      <p class="page-hint">I pezzi <strong>liberi</strong> in magazzino sono quelli usati dalla Build per la versione “ottimale” (miglior combinazione tra i liberi per slot).</p>
+
+      <h2 id="filtri-inventario-manufatti">Filtri inventario (pagina Manufatti)</h2>
+      <p>Nella tabella <strong>Tutti i pezzi</strong> puoi aprire <strong>Mostra filtri inventario</strong> per restringere l’elenco quando hai molti record — in stile ai filtri mentali che usi nel gioco (slot, set, statistiche).</p>
+      <ul style="line-height:1.65;margin-left:1.2rem">
+        <li><strong>Slot</strong> — fiore, piuma, sabbie, calice, corona o tutti.</li>
+        <li><strong>Set</strong> — testo “contiene”: es. parte del nome del set.</li>
+        <li><strong>Main</strong> — solo pezzi con quella main stat (elenco tratto dai tuoi dati).</li>
+        <li><strong>Chi ha il pezzo</strong> — tutti, solo magazzino, o un personaggio specifico.</li>
+        <li><strong>Stat (virgola)</strong> — come nei filtri “voglio CR e CD%”: scrivi più sigle separate da <strong>virgola</strong> (es. <code>CR, CD%, ATK%</code>). Restano i pezzi che hanno <strong>tutte</strong> quelle stringhe, ciascuna almeno una volta nella <strong>main</strong> o in una <strong>sub</strong> (confronto non case-sensitive, sottostringa: <code>CR</code> va bene anche per <code>CR%</code> se il nome della stat lo contiene).</li>
+        <li><strong>Testo</strong> — ricerca libera su tutto il pezzo (set, nome, valori…).</li>
+      </ul>
+      <p class="page-hint">Puoi <strong>chiudere</strong> il pannello filtri per guadagnare spazio: i criteri restano in memoria finché non premi <strong>Reset</strong>. Per vedere di nuovo tutti i pezzi senza toccare i campi, usa Reset.</p>
+
+      <h2>Dashboard</h2>
+      <p>Il riquadro <strong>TOP PERSONAGGIO</strong> e le classifiche usano solo i <strong>dati nel database</strong>. Se non hai personaggi salvati, compare un messaggio e i campi restano <strong>—</strong>. L’<strong>immagine di sfondo</strong> della pagina Dashboard è decorativa: non è il nome del personaggio in classifica.</p>
+
+      <h2>Build Analysis</h2>
+      <p>Scegli un personaggio <strong>salvato</strong>. Confronta build <strong>attuale</strong> (manufatti che hai assegnato a quel PG) con una versione <strong>ottimale</strong> che sceglie i migliori pezzi <strong>liberi</strong> in magazzino per ogni slot. Vedi anche l’avviso in cima alla pagina sul DPS.</p>
+
+      <h2>Team Builder e Dashboard</h2>
+      <p><strong>Team Builder</strong> — il “power” del team è basato su livelli ed elementi, <strong>non</strong> sui manufatti. <strong>Dashboard</strong> — i DPS mostrati usano la stessa logica della Build (manufatti equipaggiati). In entrambe le pagine trovi l’avviso in alto sul DPS.</p>
+
+      <h2>Costellazioni (C1 … C6)</h2>
+      <p>Per ogni costellazione solo due valori:</p>
+      <ul>
+        <li><strong>0</strong> = non attiva</li>
+        <li><strong>1</strong> = attiva</li>
+      </ul>
+
+      <h2>Talenti (sette caselle)</h2>
+      <ul style="line-height:1.65;margin-left:1.2rem">
+        <li><strong>-</strong> (trattino) = non compilato / non usi quel dato</li>
+        <li><strong>0</strong> = livello zero</li>
+        <li><strong>da 1 a 10</strong> = livello come nel gioco</li>
+      </ul>
+      <p>Le prime tre sono <strong>AA</strong>, <strong>abilità E</strong>, <strong>tripudio Q</strong>. Le altre quattro sono solo appunti: <strong>non entrano nel calcolo DPS</strong> dell’app.</p>
+
+      <h2>Pulsanti utili sulla scheda Personaggio</h2>
+      <ul style="line-height:1.65;margin-left:1.2rem">
+        <li><strong>NUOVO</strong> — pulisce il modulo per iniziare un’altra scheda (non cancella i salvataggi già fatti).</li>
+        <li><strong>SALVA</strong> — registra la scheda corrente.</li>
+        <li><strong>CANCELLA</strong> — elimina il personaggio salvato che stai guardando (chiede conferma).</li>
+      </ul>
+
+      <h2>Questionario avanzato (Word)</h2>
+      <p>Se preferisci un modulo più lungo da compilare fuori dall’app, puoi scaricare il file qui sotto e, quando è pronto, inviarlo a
+        <a href="mailto:shokran@hotmail.it">shokran@hotmail.it</a>.</p>
+      <p style="margin-top:0.75rem">
+        <a class="btn btn-primary" href="questionario_genshin_avanzato.docx" download>Scarica questionario_genshin_avanzato.docx</a>
+      </p>
+
+      <p style="margin-top:1.5rem;font-size:1.1rem;color:var(--accent-dark)"><strong>Buon divertimento su Teyvat!</strong></p>
+      <p class="page-hint"><a href="personaggio.html">Vai alla scheda Personaggio</a> · <a href="artefatti.html">Apri il magazzino Manufatti</a></p>
+    </div>
+  </main>
+</body>
+</html>

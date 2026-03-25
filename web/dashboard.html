@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard — Genshin Manager</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page-bg page-bg-dashboard">
+  <nav class="app-nav" aria-label="Navigazione principale">
+    <div class="nav-pages">
+      <a href="personaggio.html">Personaggio</a>
+      <a href="artefatti.html">Manufatti</a>
+      <a href="build.html">Build Analysis</a>
+      <a href="team.html">Team Builder</a>
+      <a href="dashboard.html" class="active">Dashboard</a>
+      <a href="istruzioni.html">Come si usa</a>
+      <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
+    </div>
+  </nav>
+
+  <aside class="app-notice app-notice-dps" role="note">
+    <span class="app-notice-text"><strong>DPS</strong> in questa pagina = stesso calcolo Build (solo manufatti assegnati). Personaggi senza equip hanno DPS artefatti basso anche con stat alte sulla scheda.</span>
+    <a class="app-notice-link" href="istruzioni.html#dps-e-manufatti">Come si usa</a>
+  </aside>
+
+  <main>
+    <div class="section section-header">
+      <h1>DASHBOARD</h1>
+      <p id="dashboardErroreMsg" class="page-hint dashboard-errore-msg" hidden></p>
+      <p id="dashboardVuotoMsg" class="page-hint dashboard-vuoto-msg" hidden>Nessun personaggio salvato nel database: i numeri sotto restano vuoti. Aggiungi una scheda da <a href="personaggio.html">Personaggio</a>. <span class="dashboard-bg-note">Il nome in TOP PERSONAGGIO viene dai dati salvati, non dall’immagine di sfondo.</span></p>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi-box">
+        <h2>🔥 TOP PERSONAGGIO</h2>
+        <p class="kpi-value" id="topNome">—</p>
+        <p class="kpi-sub" id="topDps">DPS: —</p>
+      </div>
+      <div class="kpi-box">
+        <h2>⚔ DPS MEDIO</h2>
+        <p class="kpi-value" id="dpsMedio">—</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>🧩 TEAM MIGLIORE</h2>
+      <div class="team-migliore" id="teamMigliore">
+        <span class="slot">—</span><span class="slot">—</span><span class="slot">—</span><span class="slot">—</span>
+      </div>
+      <p class="team-power">Power: <span id="teamPower">—</span></p>
+    </div>
+
+    <div class="section">
+      <h2>📊 TOP 5 PERSONAGGI</h2>
+      <ul class="classifica" id="top5">
+        <li>—</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>⚙ BUILD MIGLIORABILI</h2>
+      <ul class="migliorabili" id="buildMigliorabili">
+        <li>—</li>
+      </ul>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-primary" id="btnAggiorna">AGGIORNA</button>
+    </div>
+  </main>
+
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

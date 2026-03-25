@@ -1,0 +1,191 @@
+"""Gestione connessioni database."""
+import sqlite3
+from pathlib import Path
+
+from config import DB_PATH, ARTEFATTI_DB_PATH
+
+
+def get_connection():
+    """Connessione al database principale."""
+    return sqlite3.connect(DB_PATH)
+
+
+def get_artefatti_connection():
+    """Connessione al database artefatti."""
+    return sqlite3.connect(ARTEFATTI_DB_PATH)
+
+
+def init_databases(conn_main, conn_artefatti):
+    """Inizializza entrambi i database con schema e migrazioni."""
+    _init_main_db(conn_main)
+    _init_artefatti_db(conn_artefatti)
+    _migrate_artefatti_v4_reset_inventario(conn_main, conn_artefatti)
+    _migrate_artefatti_v5_assegna_su_artefatto(conn_main, conn_artefatti)
+    _pulisci_assegna_orfani_artefatti(conn_main, conn_artefatti)
+
+
+def _init_main_db(conn):
+    """Schema e migrazioni database principale."""
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS personaggi (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL UNIQUE,
+            livello INTEGER DEFAULT 1,
+            elemento TEXT DEFAULT 'Pyro',
+            hp_flat INTEGER, atk_flat INTEGER, def_flat INTEGER, em_flat INTEGER,
+            cr INTEGER, cd INTEGER, er INTEGER
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS armi (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            personaggio_id INTEGER UNIQUE REFERENCES personaggi(id),
+            nome TEXT NOT NULL, tipo TEXT DEFAULT 'Spada',
+            livello INTEGER DEFAULT 1, stelle INTEGER DEFAULT 5,
+            atk_base INTEGER, stat_secondaria TEXT, valore_stat REAL
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS equipaggiamento (
+            personaggio_id INTEGER REFERENCES personaggi(id),
+            slot TEXT CHECK(slot IN ('fiore','piuma','sabbie','calice','corona')),
+            artefatto_id INTEGER,
+            PRIMARY KEY(personaggio_id, slot)
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS costellazioni (
+            personaggio_id INTEGER PRIMARY KEY REFERENCES personaggi(id),
+            c1 INTEGER DEFAULT 0, c2 INTEGER DEFAULT 0, c3 INTEGER DEFAULT 0,
+            c4 INTEGER DEFAULT 0, c5 INTEGER DEFAULT 0, c6 INTEGER DEFAULT 0
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS talenti (
+            personaggio_id INTEGER PRIMARY KEY REFERENCES personaggi(id),
+            aa INTEGER DEFAULT 1, skill INTEGER DEFAULT 1, burst INTEGER DEFAULT 1
+        )
+    """)
+    _run_migrations_main(cur)
+    conn.commit()
+
+
+def _run_migrations_main(cur):
+    """Migrazioni per database esistenti."""
+    for col in ("pas1", "pas2", "pas3", "pas4"):
+        try:
+            cur.execute(f"ALTER TABLE talenti ADD COLUMN {col} INTEGER")
+        except sqlite3.OperationalError:
+            pass
+    for col in ("hp_flat", "atk_flat", "def_flat", "em_flat", "cr", "cd", "er"):
+        try:
+            cur.execute(f"ALTER TABLE personaggi ADD COLUMN {col} INTEGER")
+        except sqlite3.OperationalError:
+            pass
+    try:
+        cur.execute("PRAGMA table_info(armi)")
+        if "personaggio_id" not in [r[1] for r in cur.fetchall()]:
+            cur.execute("DROP TABLE IF EXISTS armi")
+            cur.execute("""
+                CREATE TABLE armi (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    personaggio_id INTEGER UNIQUE REFERENCES personaggi(id),
+                    nome TEXT NOT NULL, tipo TEXT DEFAULT 'Spada',
+                    livello INTEGER DEFAULT 1, stelle INTEGER DEFAULT 5,
+                    atk_base INTEGER, stat_secondaria TEXT, valore_stat REAL
+                )
+            """)
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cur.execute("PRAGMA table_info(equipaggiamento)")
+        cols = [r[1] for r in cur.fetchall()]
+        if cols and "slot" not in cols:
+            cur.execute("DROP TABLE IF EXISTS equipaggiamento")
+    except sqlite3.OperationalError:
+        pass
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS equipaggiamento (
+            personaggio_id INTEGER REFERENCES personaggi(id),
+            slot TEXT CHECK(slot IN ('fiore','piuma','sabbie','calice','corona')),
+            artefatto_id INTEGER,
+            PRIMARY KEY(personaggio_id, slot)
+        )
+    """)
+
+
+def _init_artefatti_db(conn):
+    """Schema database artefatti."""
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS artefatti (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            slot TEXT NOT NULL CHECK(slot IN ('fiore','piuma','sabbie','calice','corona')),
+            set_nome TEXT, nome TEXT,
+            livello INTEGER DEFAULT 20, stelle INTEGER DEFAULT 5,
+            main_stat TEXT, main_val REAL,
+            sub1_stat TEXT, sub1_val REAL, sub2_stat TEXT, sub2_val REAL,
+            sub3_stat TEXT, sub3_val REAL, sub4_stat TEXT, sub4_val REAL
+        )
+    """)
+    conn.commit()
+
+
+def _migrate_artefatti_v4_reset_inventario(conn_main, conn_art):
+    """
+    Una tantum: svuota inventario artefatti e equipaggiamenti sui personaggi.
+    user_version su artefatti.db = 4 dopo l'esecuzione.
+    """
+    cur = conn_art.cursor()
+    cur.execute("PRAGMA user_version")
+    uv = cur.fetchone()[0] or 0
+    if uv >= 4:
+        return
+    cur.execute("DELETE FROM artefatti")
+    conn_art.commit()
+    conn_main.execute("DELETE FROM equipaggiamento")
+    conn_main.commit()
+    cur.execute("PRAGMA user_version = 4")
+    conn_art.commit()
+
+
+def _migrate_artefatti_v5_assegna_su_artefatto(conn_main, conn_art):
+    """
+    v5: proprietario dell'artefatto in `artefatti.assegna_a_id` (magazzino se NULL).
+    Migra le righe da `equipaggiamento` poi svuota quella tabella.
+    """
+    cur = conn_art.cursor()
+    cur.execute("PRAGMA user_version")
+    uv = cur.fetchone()[0] or 0
+    if uv >= 5:
+        return
+    try:
+        cur.execute("ALTER TABLE artefatti ADD COLUMN assegna_a_id INTEGER")
+    except sqlite3.OperationalError:
+        pass
+    cur_main = conn_main.cursor()
+    cur_main.execute(
+        "SELECT personaggio_id, slot, artefatto_id FROM equipaggiamento WHERE artefatto_id IS NOT NULL"
+    )
+    for row in cur_main.fetchall():
+        pid, _slot, aid = row[0], row[1], row[2]
+        cur.execute("UPDATE artefatti SET assegna_a_id=? WHERE id=?", (pid, aid))
+    cur_main.execute("DELETE FROM equipaggiamento")
+    conn_main.commit()
+    cur.execute("PRAGMA user_version = 5")
+    conn_art.commit()
+
+
+def _pulisci_assegna_orfani_artefatti(conn_main, conn_art):
+    """Rimuove assegna_a_id se il personaggio non esiste più (DB principale)."""
+    cur_m = conn_main.cursor()
+    cur_m.execute("SELECT id FROM personaggi")
+    valid = {r[0] for r in cur_m.fetchall()}
+    cur = conn_art.cursor()
+    cur.execute("SELECT id, assegna_a_id FROM artefatti WHERE assegna_a_id IS NOT NULL")
+    for row in cur.fetchall():
+        aid, pid = row[0], row[1]
+        if pid not in valid:
+            cur.execute("UPDATE artefatti SET assegna_a_id=NULL WHERE id=?", (aid,))
+    conn_art.commit()

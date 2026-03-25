@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="api-base" content="/api">
+  <title>Build Analysis — Genshin Manager</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page-bg page-bg-build">
+  <nav class="app-nav" aria-label="Navigazione principale">
+    <div class="nav-pages">
+      <a href="personaggio.html">Personaggio</a>
+      <a href="artefatti.html">Manufatti</a>
+      <a href="build.html" class="active">Build Analysis</a>
+      <a href="team.html">Team Builder</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="istruzioni.html">Come si usa</a>
+      <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
+    </div>
+  </nav>
+
+  <aside class="app-notice app-notice-dps" role="note">
+    <span class="app-notice-text"><strong>DPS qui sotto</strong> deriva dai <strong>manufatti</strong> equipaggiati (assegnati in Manufatti). Senza cinque pezzi sul personaggio i numeri sono bassi o parziali — le stat foglio Personaggio non le sostituiscono.</span>
+    <a class="app-notice-link" href="istruzioni.html#dps-e-manufatti">Come si usa</a>
+  </aside>
+
+  <main>
+    <div class="section section-autocomplete">
+      <h2>🔍 Personaggio</h2>
+      <p class="page-hint">Cerca il nome; il calcolo vale per schede <strong>Salvate</strong>. L’ottimale usa pezzi <strong>liberi</strong> in <a href="artefatti.html">Manufatti</a>. Vedi l’avviso <strong>DPS</strong> sopra.</p>
+      <p class="page-hint" id="buildSelectionHint" style="min-height:1.35em;font-weight:500;color:var(--accent)"></p>
+      <div class="form-row">
+        <div class="autocomplete-wrap">
+          <input type="text" id="searchPersonaggio" placeholder="Cerca nome o apri l’elenco…" autocomplete="off">
+          <ul class="autocomplete-list" id="autocompleteList" style="display:none"></ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="build-compare">
+        <div class="build-box">
+          <h3>BUILD ATTUALE</h3>
+          <div class="stat-row">ATK: <span id="curr_atk">—</span></div>
+          <div class="stat-row">CR/CD: <span id="curr_crcd">—</span></div>
+          <div class="stat-row">ER: <span id="curr_er">—</span></div>
+          <div class="stat-row">DPS: <span id="curr_dps">—</span></div>
+        </div>
+        <div class="build-box">
+          <h3>BUILD OTTIMALE</h3>
+          <div class="stat-row">ATK: <span id="opt_atk">—</span></div>
+          <div class="stat-row">CR/CD: <span id="opt_crcd">—</span></div>
+          <div class="stat-row">ER: <span id="opt_er">—</span></div>
+          <div class="stat-row">DPS: <span id="opt_dps">—</span></div>
+        </div>
+      </div>
+
+      <div class="build-box" style="margin-top:1rem">
+        <h3>DIFFERENZA</h3>
+        <div class="stat-row">+ DPS: <span id="diff_dps" class="positive">—</span></div>
+        <div class="stat-row">+ CR/CD: <span id="diff_crcd">—</span></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Lista Artefatti Disponibili</h2>
+      <table>
+        <thead>
+          <tr><th>SLOT</th><th>SET</th><th>MAIN</th><th>VAL</th><th>SCORE</th></tr>
+        </thead>
+        <tbody id="tabellaArtefatti">
+          <tr><td colspan="5" style="text-align:center;color:#94a3b8">Seleziona un personaggio e premi Calcola</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-primary" id="btnCalcola">CALCOLA BUILD</button>
+      <button class="btn btn-secondary" id="btnApplica">APPLICA</button>
+      <button class="btn btn-secondary" id="btnConfronta">CONFRONTA</button>
+    </div>
+  </main>
+
+  <script src="js/build.js"></script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="api-base" content="/api">
+  <title>Manufatti — Magazzino — Genshin Manager</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page-bg page-bg-personaggio">
+  <nav class="app-nav" aria-label="Navigazione principale">
+    <div class="nav-pages">
+      <a href="personaggio.html">Personaggio</a>
+      <a href="artefatti.html" class="active">Manufatti</a>
+      <a href="build.html">Build Analysis</a>
+      <a href="team.html">Team Builder</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="istruzioni.html">Come si usa</a>
+      <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
+    </div>
+  </nav>
+
+  <aside class="app-notice app-notice-dps" role="note">
+    <span class="app-notice-text"><strong>DPS (Build / Dashboard):</strong> conta solo i manufatti assegnati al personaggio da questa pagina. Le stat sulla scheda Personaggio <strong>non</strong> sostituiscono i pezzi — senza manufatti equipaggiati il DPS artefatti non è significativo.</span>
+    <a class="app-notice-link" href="istruzioni.html#dps-e-manufatti">Come si usa</a>
+  </aside>
+
+  <main>
+    <div class="section">
+      <h2>Magazzino manufatti</h2>
+      <p class="page-hint page-hint-oneline">Registri e modifichi i pezzi qui; assegnazione nel riquadro blu; scheda <a href="personaggio.html">Personaggio</a> = solo lettura equip.</p>
+    </div>
+
+    <div class="section" id="section-form-manufatto">
+      <h2>➕ Aggiungi o modifica manufatto</h2>
+      <p id="formModuloBanner" class="page-hint" hidden style="margin-bottom:0.75rem">Stai modificando il manufatto <strong>#<span id="formModuloId"></span></strong>. Salva per applicare, <strong>Annulla</strong> per tornare a nuovo pezzo.</p>
+      <p style="color:var(--text-muted);margin-bottom:1rem;font-size:0.92rem">Pezzo sopra, assegnazione nel riquadro blu. <strong>AGGIUNGI</strong> / riga → <strong>Carica nel modulo</strong> → <strong>SALVA MODIFICHE</strong>.</p>
+      <p id="slotLockedHint" class="page-hint" hidden style="margin-bottom:0.75rem">Questo pezzo è <strong>equipaggiato</strong>: non puoi cambiare <em>slot</em> finché è su un personaggio. Per liberarlo, nel riquadro sotto scegli <strong>Solo magazzino (libero)</strong> e salva; poi potrai cambiare slot se serve.</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Slot</label>
+          <select id="slot">
+            <option value="fiore">Fiore</option>
+            <option value="piuma">Piuma</option>
+            <option value="sabbie">Sabbie</option>
+            <option value="calice">Calice</option>
+            <option value="corona">Corona</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Liv</label>
+          <input type="number" id="livello" value="20" min="0" max="20" style="width:60px">
+        </div>
+        <div class="form-group">
+          <label>★</label>
+          <input type="number" id="stelle" value="5" min="1" max="5" style="width:50px">
+        </div>
+      </div>
+      <div class="form-group form-group-stack">
+        <label for="set_nome">Set (catalogo)</label>
+        <select id="set_nome" class="inv-set-select"><option value="">— Scegli set —</option></select>
+      </div>
+      <div class="form-group form-group-stack">
+        <label for="nome_pezzo">Nome pezzo</label>
+        <select id="nome_pezzo" class="inv-set-select"><option value="">— Scegli prima il set —</option></select>
+      </div>
+      <div class="form-group form-group-stack" id="nome_custom_wrap" hidden>
+        <label for="nome_custom">Nome personalizzato</label>
+        <input type="text" id="nome_custom" class="inv-input-full" placeholder="Se non è in elenco o vuoi un’etichetta diversa" autocomplete="off">
+      </div>
+      <div class="form-row inv-main-row">
+        <div class="form-group form-group-main">
+          <label for="main_stat">Main stat</label>
+          <select id="main_stat"><option>—</option></select>
+        </div>
+        <div class="form-group inv-main-val-group">
+          <label for="main_val">Val</label>
+          <input type="number" id="main_val" placeholder="46.6" step="0.1" class="inv-input-val" inputmode="decimal">
+        </div>
+      </div>
+      <div class="substats-section">
+        <h3 class="inv-subs-heading">Substat</h3>
+        <div class="inv-subs-vertical" id="substats">
+          <div class="form-group inv-sub-cell"><span class="inv-sub-label">Sub 1</span><div class="inv-sub-inputs"><select class="sub_stat" aria-label="Stat sub 1"><option value="">—</option></select><input type="number" class="sub_val" placeholder="Valore" step="0.1" inputmode="decimal" aria-label="Valore sub 1"></div></div>
+          <div class="form-group inv-sub-cell"><span class="inv-sub-label">Sub 2</span><div class="inv-sub-inputs"><select class="sub_stat" aria-label="Stat sub 2"><option value="">—</option></select><input type="number" class="sub_val" placeholder="Valore" step="0.1" inputmode="decimal" aria-label="Valore sub 2"></div></div>
+          <div class="form-group inv-sub-cell"><span class="inv-sub-label">Sub 3</span><div class="inv-sub-inputs"><select class="sub_stat" aria-label="Stat sub 3"><option value="">—</option></select><input type="number" class="sub_val" placeholder="Valore" step="0.1" inputmode="decimal" aria-label="Valore sub 3"></div></div>
+          <div class="form-group inv-sub-cell"><span class="inv-sub-label">Sub 4</span><div class="inv-sub-inputs"><select class="sub_stat" aria-label="Stat sub 4"><option value="">—</option></select><input type="number" class="sub_val" placeholder="Valore" step="0.1" inputmode="decimal" aria-label="Valore sub 4"></div></div>
+        </div>
+      </div>
+      <div class="section-assegnazione-unica">
+        <h3 class="assegnazione-titolo">Assegnazione al personaggio</h3>
+        <p class="page-hint" style="margin:0 0 0.5rem;font-size:0.82rem"><strong>Unico punto</strong> per equip su scheda salvata. <strong>Solo magazzino</strong> = libero; altrimenti slot del modulo. <a href="istruzioni.html#manufatti-magazzino">Guida</a></p>
+        <div class="form-group form-group-stack">
+          <label for="assegn_a_personaggio">Personaggio</label>
+          <select id="assegn_a_personaggio" class="inv-set-select">
+            <option value="">— Solo magazzino (libero) —</option>
+          </select>
+        </div>
+      </div>
+      <div class="btn-group form-manufatto-actions" style="margin-top:1rem">
+        <button type="button" class="btn btn-primary" id="btnAggiungi">AGGIUNGI</button>
+        <button type="button" class="btn btn-secondary" id="btnAnnullaForm" hidden>Annulla</button>
+        <button type="button" class="btn btn-danger" id="btnEliminaForm" hidden>Elimina</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Tutti i pezzi</h2>
+      <p class="page-hint" style="margin:0 0 0.45rem;font-size:0.86rem">Riga → <strong>Carica nel modulo</strong>; resto riga → suggerimenti. Filtri: <a href="istruzioni.html#filtri-inventario-manufatti">spiegazione in Come si usa</a>.</p>
+      <div class="magazzino-filtri-wrap">
+        <button type="button" class="btn btn-secondary btn-filtri-toggle" id="btnToggleFiltriMagazzino" aria-expanded="false" aria-controls="magazzinoFiltriPanel">Mostra filtri inventario</button>
+        <div id="magazzinoFiltriPanel" class="magazzino-filtri magazzino-filtri-panel" hidden>
+          <div class="form-row magazzino-filtri-row magazzino-filtri-row-tight">
+            <div class="form-group">
+              <label for="filtro_slot">Slot</label>
+              <select id="filtro_slot" class="filtro-input-compact">
+                <option value="">Tutti</option>
+                <option value="fiore">Fiore</option>
+                <option value="piuma">Piuma</option>
+                <option value="sabbie">Sabbie</option>
+                <option value="calice">Calice</option>
+                <option value="corona">Corona</option>
+              </select>
+            </div>
+            <div class="form-group form-group-grow">
+              <label for="filtro_set">Set</label>
+              <input type="text" id="filtro_set" class="inv-input-full filtro-input-compact" list="datalist_set_magazzino" placeholder="contiene…" autocomplete="off">
+              <datalist id="datalist_set_magazzino"></datalist>
+            </div>
+            <div class="form-group">
+              <label for="filtro_main">Main</label>
+              <select id="filtro_main" class="filtro-input-compact"><option value="">Tutte</option></select>
+            </div>
+            <div class="form-group">
+              <label for="filtro_util">Chi ha il pezzo</label>
+              <select id="filtro_util" class="filtro-input-compact">
+                <option value="__tutti__">Tutti</option>
+                <option value="__mag__">Magazzino</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row magazzino-filtri-row magazzino-filtri-row-tight">
+            <div class="form-group form-group-grow">
+              <label for="filtro_stat_tokens">Stat (virgola)</label>
+              <input type="text" id="filtro_stat_tokens" class="inv-input-full filtro-input-compact" placeholder="CR, CD%…" autocomplete="off" title="Tutte le sigle devono comparire in main o sub">
+            </div>
+            <div class="form-group form-group-grow">
+              <label for="filtro_testo">Testo</label>
+              <input type="text" id="filtro_testo" class="inv-input-full filtro-input-compact" placeholder="cerca…" autocomplete="off">
+            </div>
+            <div class="form-group magazzino-filtri-reset-wrap">
+              <span class="filtri-reset-label" aria-hidden="true">&nbsp;</span>
+              <button type="button" class="btn btn-secondary btn-compact" id="btnResetFiltri">Reset</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="table-scroll table-scroll-magazzino">
+        <table class="table-magazzino">
+          <thead>
+            <tr><th>ID</th><th>Slot</th><th>Set</th><th>Pezzo</th><th>Main</th><th>Val</th><th>Utilizzatore</th><th>Sub 1-4</th><th class="th-azioni">Modulo</th></tr>
+          </thead>
+          <tbody id="tabellaInventario"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <div id="modalInfoBackdrop" class="modal-backdrop" hidden>
+    <div class="modal-panel modal-panel-lg" role="dialog" aria-labelledby="modalInfoTitle">
+      <button type="button" class="modal-close" id="modalInfoClose" aria-label="Chiudi">&times;</button>
+      <h3 id="modalInfoTitle">Manufatto</h3>
+      <div id="modalInfoBody" class="modal-info-body"></div>
+      <h4 class="modal-subtitle">A chi conviene di più (indicativo)</h4>
+      <p id="modalInfoMessaggio" class="page-hint modal-hint"></p>
+      <ul id="modalInfoRanking" class="modal-ranking"></ul>
+      <p class="page-hint modal-footer-hint">Assegnazione solo dal modulo Manufatti. <strong>DPS Build</strong> = manufatti equipaggiati, non le stat foglio Personaggio.</p>
+    </div>
+  </div>
+
+  <script src="js/artefatti.js"></script>
+</body>
+</html>
