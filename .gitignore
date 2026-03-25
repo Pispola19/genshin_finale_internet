@@ -1,12 +1,10 @@
 __pycache__/
 *.pyc
 .DS_Store
-venv/
-.env
-.env.*
-*.log
-.pytest_cache/
-.idea/
-.vscode/
-# DB generati in runtime (Render: usa GINSHIN_DATA_DIR + disco persistente se serve tenere i dati)
+logs/
+*.egg-info/
+# Database locale (non versionare dati utente)
 *.db
+user_artifact_sets.json
+# Log avvio locale (launchd)
+mac/*.log

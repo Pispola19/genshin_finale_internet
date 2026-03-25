@@ -1,8 +1,33 @@
 """
 Catalogo artefatti Genshin Impact in italiano.
 Fonte: gach.app, genshin-builds, Hoyolab. Set -> (fiore, piuma, sabbie, calice, corona).
+I nomi set aggiunti dall’utente sono in ``user_artifact_sets.json`` (merge in lista_set).
 """
+from __future__ import annotations
+
+import json
+from pathlib import Path
 from typing import List, Tuple
+
+_USER_SETS_FILE = Path(__file__).resolve().parent.parent / "user_artifact_sets.json"
+
+
+def load_extra_set_names() -> List[str]:
+    """Set registrati dall’utente (non nel catalogo builtin)."""
+    if not _USER_SETS_FILE.is_file():
+        return []
+    try:
+        raw = json.loads(_USER_SETS_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    if isinstance(raw, list):
+        return [str(x).strip() for x in raw if str(x).strip()]
+    if isinstance(raw, dict):
+        arr = raw.get("sets")
+        if isinstance(arr, list):
+            return [str(x).strip() for x in arr if str(x).strip()]
+    return []
+
 
 # (set_nome, (fiore, piuma, sabbie, calice, corona))
 CATALOGO_ARTEFATTI: List[Tuple[str, Tuple[str, str, str, str, str]]] = [
@@ -40,6 +65,9 @@ CATALOGO_ARTEFATTI: List[Tuple[str, Tuple[str, str, str, str, str]]] = [
     ("Miracoloso", ("Fiore miracoloso", "Piuma miracolosa", "Clessidra miracolosa", "Calice miracoloso", "Orecchini miracolosi")),
     ("Dottoressa errante", ("Loto argentato della dottoressa errante", "Piuma di gufo della dottoressa errante", "Orologio della dottoressa errante", "Vaso per medicinali della dottoressa errante", "Fazzoletto della dottoressa errante")),
     ("Fiore della vitalità", ("Fiore della vitalità", "Piuma della luce nascente", "Reliquia solare", "Patto siglato", "Portamento tonante")),
+    # Stessi pezzi; nome ufficiale IT in gioco (Honey Hunter / client): “Aldilà vermiglio” (Vermillion Hereafter).
+    ("Aldilà vermiglio", ("Fiore della vitalità", "Piuma della luce nascente", "Reliquia solare", "Patto siglato", "Portamento tonante")),
+    ("Al di là dell'orizzonte vermiglio", ("Fiore della vitalità", "Piuma della luce nascente", "Reliquia solare", "Patto siglato", "Portamento tonante")),
     ("Cacciatrice smeraldo", ("In memoria dei campi smeraldo", "Piuma della Cacciatrice smeraldo", "Determinazione della Cacciatrice smeraldo", "Borraccia della Cacciatrice smeraldo", "Diadema della Cacciatrice smeraldo")),
     ("Scommettitrice", ("Fermaglio della scommettitrice", "Piuma della scommettitrice", "Orologio della scommettitrice", "Tazza per dadi della scommettitrice", "Orecchini della scommettitrice")),
     ("Cronache del padiglione del deserto", ("Miriade di Ay-Khanoum", "Banchetto appassito", "Coagulo di un istante", "Bottiglia magica del custode dei segreti", "Corona d'ametista")),
@@ -71,15 +99,41 @@ MAIN_STATS_PER_SLOT = {
 }
 
 
+def register_extra_set(set_nome: str) -> None:
+    """Aggiunge un nome set a ``user_artifact_sets.json`` se non è già nel catalogo né nella lista utente."""
+    name = (set_nome or "").strip()
+    if not name:
+        return
+    builtin_lower = {s.strip().lower() for s, _ in CATALOGO_ARTEFATTI}
+    if name.lower() in builtin_lower:
+        return
+    current = load_extra_set_names()
+    if name.lower() in {x.lower() for x in current}:
+        return
+    current.append(name)
+    current.sort(key=str.lower)
+    _USER_SETS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _USER_SETS_FILE.write_text(
+        json.dumps({"sets": current}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
 def lista_set() -> List[str]:
-    """Lista unica di nomi set, ordinata."""
-    seen = set()
-    out = []
+    """Lista unica di nomi set (catalogo + utente), ordinata."""
+    seen: set[str] = set()
+    out: List[str] = []
     for set_nome, _ in CATALOGO_ARTEFATTI:
-        if set_nome not in seen:
-            seen.add(set_nome)
+        ln = set_nome.strip().lower()
+        if ln not in seen:
+            seen.add(ln)
             out.append(set_nome)
-    return sorted(out)
+    for name in load_extra_set_names():
+        ln = name.strip().lower()
+        if name and ln not in seen:
+            seen.add(ln)
+            out.append(name)
+    return sorted(out, key=str.lower)
 
 
 def pezzi_catalogo_per_set_e_slot(set_nome: str, slot: str) -> List[str]:

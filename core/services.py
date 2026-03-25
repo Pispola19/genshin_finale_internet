@@ -18,10 +18,7 @@ class AppService:
 
     def __init__(self):
         self._personaggio = PersonaggioService()
-        self._artefatto = ArtefattoService(
-            self._personaggio.conn,
-            self._personaggio.conn_art
-        )
+        self._artefatto = ArtefattoService()
         self._build = BuildService(self._personaggio, self._artefatto)
         self._team = TeamService(self._personaggio)
         self._dashboard = DashboardService(self._personaggio, self._build, self._team)

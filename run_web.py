@@ -2,9 +2,6 @@
 import os
 import socket
 import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from web.app import app
 
@@ -31,6 +28,11 @@ def _resolve_port() -> int:
 
 
 if __name__ == "__main__":
+    from logging_config import setup_logging
+
+    log = setup_logging()
+    log.getChild("web").info("Avvio server Flask (run_web)")
+
     port = _resolve_port()
     debug = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
     if port != 5001 and os.environ.get("PORT") is None:

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "genshin-manager"
+version = "1.0.0"
+description = "Genshin Manager — GUI Tkinter e app web Flask"
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=2.0.0",
+    "gunicorn>=21.0.0",
+    "pillow>=9.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gui*", "core*", "db*", "web*"]
+
+[tool.setuptools]
+py-modules = ["config", "main", "run_web", "logging_config"]

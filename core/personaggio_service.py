@@ -5,7 +5,7 @@ Tutte le chiamate ai Repository per personaggi passano da qui.
 from typing import List, Optional, Tuple
 
 from core.validation import parse_number, validate_nome
-from db.connection import get_connection, get_artefatti_connection, init_databases
+from db.connection import close_thread_connections, get_connection, get_artefatti_connection
 from config import SLOT_DB, PERSONAGGI_GENSHIN
 from db.repositories import (
     PersonaggioRepository, ArmaRepository,
@@ -31,28 +31,26 @@ class PersonaggioService:
     """Servizio personaggi. Nessun accesso diretto ai Repository dalla GUI."""
 
     def __init__(self):
-        self._conn = get_connection()
-        self._conn_art = get_artefatti_connection()
-        init_databases(self._conn, self._conn_art)
+        """Lo schema DB si inizializza al primo uso; ogni thread ha la sua coppia di connessioni."""
+        pass
 
     def close(self) -> None:
-        self._conn.close()
-        self._conn_art.close()
+        close_thread_connections()
 
     @property
     def conn(self):
-        return self._conn
+        return get_connection()
 
     @property
     def conn_art(self):
-        return self._conn_art
+        return get_artefatti_connection()
 
     # --- Validazione ---
     def valida_nome(self, nome: str, escludi_id: Optional[int] = None) -> Tuple[bool, str]:
         ok, msg = validate_nome(nome)
         if not ok:
             return False, msg
-        if PersonaggioRepository.nome_esiste(self._conn, nome, escludi_id):
+        if PersonaggioRepository.nome_esiste(self.conn, nome, escludi_id):
             return False, f"Il nome '{nome}' è già usato."
         return True, ""
 
@@ -65,17 +63,17 @@ class PersonaggioService:
 
     def carica_dati_completi(self, id_pg: int) -> Optional[dict]:
         """Dati completi personaggio per popolare il form (già formattati per UI)."""
-        pg = PersonaggioRepository.get(self._conn, id_pg)
+        pg = PersonaggioRepository.get(self.conn, id_pg)
         if not pg:
             return None
-        arma = ArmaRepository.get(self._conn, id_pg)
-        cost = CostellazioniRepository.get(self._conn, id_pg)
-        talenti = TalentiRepository.get(self._conn, id_pg)
-        eq = ArtefattoRepository.equip_map_for_personaggio(self._conn_art, id_pg)
+        arma = ArmaRepository.get(self.conn, id_pg)
+        cost = CostellazioniRepository.get(self.conn, id_pg)
+        talenti = TalentiRepository.get(self.conn, id_pg)
+        eq = ArtefattoRepository.equip_map_for_personaggio(self.conn_art, id_pg)
         artefatti = {}
         for slot, aid in eq.items():
             if aid:
-                art = ArtefattoRepository.get(self._conn_art, aid)
+                art = ArtefattoRepository.get(self.conn_art, aid)
                 artefatti[slot] = art
 
         def _fmt(v):
@@ -135,26 +133,26 @@ class PersonaggioService:
 
     def get_personaggio(self, id_pg: int):
         """Personaggio raw per logica build/team."""
-        return PersonaggioRepository.get(self._conn, id_pg)
+        return PersonaggioRepository.get(self.conn, id_pg)
 
     def get_equipaggiamento_ids(self, personaggio_id: int) -> dict:
         """{slot: artefatto_id} per personaggio."""
-        return ArtefattoRepository.equip_map_for_personaggio(self._conn_art, personaggio_id)
+        return ArtefattoRepository.equip_map_for_personaggio(self.conn_art, personaggio_id)
 
     def lista_personaggi_righe(self) -> List[Tuple[int, str, int, str]]:
         """Righe pronte per Treeview: [(id, nome, livello, elemento), ...]."""
-        return PersonaggioRepository.lista(self._conn)
+        return PersonaggioRepository.lista(self.conn)
 
     def nomi_per_autocomplete(self) -> List[str]:
         """Lista nomi per autocomplete: PERSONAGGI_GENSHIN + personaggi esistenti non in lista."""
         set_base = set(PERSONAGGI_GENSHIN)
-        righe = PersonaggioRepository.lista(self._conn)
+        righe = PersonaggioRepository.lista(self.conn)
         extra = [r[1] for r in righe if r[1] and r[1].strip() and r[1] not in set_base]
         return list(PERSONAGGI_GENSHIN) + sorted(set(extra))
 
     def rimuovi_entrate_test(self) -> int:
         """Elimina personaggi con nome tipo 'test', 'Test1', ecc. Ritorna numero eliminati."""
-        cur = self._conn.cursor()
+        cur = self.conn.cursor()
         cur.execute("SELECT id, nome FROM personaggi")
         rows = cur.fetchall()
         eliminati = 0
@@ -185,37 +183,37 @@ class PersonaggioService:
         talenti = self._parse_talenti(form_talenti)
 
         # Id obsoleto (es. scheda eliminata ma browser con id vecchio) → tratta come nuovo salvataggio
-        if id_pg is not None and PersonaggioRepository.get(self._conn, id_pg) is None:
+        if id_pg is not None and PersonaggioRepository.get(self.conn, id_pg) is None:
             id_pg = None
 
         tuple_pg = self._to_tuple_pg(dati_pg)
         if id_pg is None:
-            existing_id = PersonaggioRepository.id_per_nome(self._conn, dati_pg["nome"])
+            existing_id = PersonaggioRepository.id_per_nome(self.conn, dati_pg["nome"])
             if existing_id is not None:
                 id_pg = existing_id
-                PersonaggioRepository.update(self._conn, id_pg, tuple_pg)
+                PersonaggioRepository.update(self.conn, id_pg, tuple_pg)
             else:
-                id_pg = PersonaggioRepository.insert(self._conn, tuple_pg)
+                id_pg = PersonaggioRepository.insert(self.conn, tuple_pg)
         else:
-            PersonaggioRepository.update(self._conn, id_pg, tuple_pg)
+            PersonaggioRepository.update(self.conn, id_pg, tuple_pg)
 
-        ArmaRepository.upsert(self._conn, id_pg, self._to_tuple_arma(dati_arma))
-        CostellazioniRepository.upsert(self._conn, id_pg, *cost)
-        TalentiRepository.upsert(self._conn, id_pg, *talenti)
+        ArmaRepository.upsert(self.conn, id_pg, self._to_tuple_arma(dati_arma))
+        CostellazioniRepository.upsert(self.conn, id_pg, *cost)
+        TalentiRepository.upsert(self.conn, id_pg, *talenti)
 
         if form_equipaggiamento is not None:
             for slot in SLOT_DB:
                 raw = form_equipaggiamento.get(slot)
                 if raw in (None, "", 0, "0"):
-                    ArtefattoRepository.set_equipaggiamento(self._conn_art, id_pg, slot, None)
+                    ArtefattoRepository.set_equipaggiamento(self.conn_art, id_pg, slot, None)
                 else:
                     aid = int(raw)
-                    ArtefattoRepository.set_equipaggiamento(self._conn_art, id_pg, slot, aid)
+                    ArtefattoRepository.set_equipaggiamento(self.conn_art, id_pg, slot, aid)
         return id_pg
 
     def elimina_personaggio(self, id_pg: int) -> None:
-        ArtefattoRepository.unassign_all_for_personaggio(self._conn_art, id_pg)
-        PersonaggioRepository.delete(self._conn, id_pg)
+        ArtefattoRepository.unassign_all_for_personaggio(self.conn_art, id_pg)
+        PersonaggioRepository.delete(self.conn, id_pg)
 
     # --- Parsing form -> strutture interne ---
     def _parse_personaggio(self, f: dict) -> dict:

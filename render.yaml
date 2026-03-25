@@ -1,9 +1,9 @@
-# Blueprint Render.com — Genshin Manager (deploy pubblico)
-# Dashboard: New Blueprint dal repo, oppure Web Service manuale con gli stessi comandi.
+# Blueprint Render.com — servizio pubblico: https://genshin-finale-internet-1.onrender.com
+# Collega questo repo in Render → Blueprint oppure Web Service manuale con gli stessi comandi.
 # Dati persistenti: aggiungi un Disco, montalo (es. /var/data) e imposta GINSHIN_DATA_DIR.
 services:
   - type: web
-    name: genshin-finale-internet-25
+    name: genshin-finale-internet-1
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
@@ -13,6 +13,6 @@ services:
         value: "3.11.9"
       - key: SECRET_KEY
         generateValue: true
-      # Opzionale: disco persistente Render
+      # Opzionale: disco persistente Render (consigliato per non perdere DB ai redeploy)
       # - key: GINSHIN_DATA_DIR
       #   value: /var/data

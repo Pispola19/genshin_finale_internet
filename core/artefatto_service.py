@@ -5,11 +5,13 @@ Tutte le chiamate ai Repository per artefatti passano da qui.
 from typing import Optional, List, Tuple, Dict, Any
 
 from core.dps import DpsCalculator
+from db.connection import get_connection, get_artefatti_connection
 from db.repositories import ArtefattoRepository, PersonaggioRepository
 from db.artifact_catalog import (
     filtra_progressivo,
     lista_set,
     pezzi_catalogo_per_set_e_slot,
+    register_extra_set,
     MAIN_STATS_PER_SLOT,
     cerca_nome_pezzo,
 )
@@ -18,14 +20,22 @@ from db.artifact_catalog import (
 class ArtefattoService:
     """Servizio artefatti. Nessun accesso diretto ai Repository dalla GUI."""
 
-    def __init__(self, conn, conn_art):
-        self._conn = conn
-        self._conn_art = conn_art
+    def __init__(self):
+        """Usa connessioni SQLite per thread (stesso thread di PersonaggioService / richiesta Flask)."""
+        pass
+
+    @staticmethod
+    def _main_conn():
+        return get_connection()
+
+    @staticmethod
+    def _art_conn():
+        return get_artefatti_connection()
 
     # --- Dati pronti per UI ---
     def lista_artefatti_liberi_righe(self, slot: str) -> List[Tuple]:
         """Righe per Treeview selezione artefatto: [(id, set_nome, main_stat, livello, stelle), ...]."""
-        lista = ArtefattoRepository.lista_liberi(self._conn_art, slot)
+        lista = ArtefattoRepository.lista_liberi(self._art_conn(), slot)
         return [
             (a["id"], a.get("set_nome", ""), a.get("main_stat", ""),
              a.get("livello", ""), a.get("stelle", ""))
@@ -34,7 +44,7 @@ class ArtefattoService:
 
     def lista_artefatti_inventario_righe(self) -> List[Tuple]:
         """Righe per Treeview inventario: [(id, slot, set_nome, main_stat, main_val, livello, stelle), ...]."""
-        lista = ArtefattoRepository.lista(self._conn_art)
+        lista = ArtefattoRepository.lista(self._art_conn())
         return [
             (a["id"], a.get("slot", ""), a.get("set_nome", ""),
              a.get("main_stat", ""), a.get("main_val", ""),
@@ -44,7 +54,7 @@ class ArtefattoService:
 
     def formato_label_artefatto(self, artefatto_id: int, max_len: int = 40) -> Optional[str]:
         """Testo per label artefatto equipaggiato."""
-        art = ArtefattoRepository.get(self._conn_art, artefatto_id)
+        art = ArtefattoRepository.get(self._art_conn(), artefatto_id)
         if not art:
             return None
         txt = f"#{art['id']} {art.get('set_nome', '')} {art.get('main_stat', '')}"
@@ -52,12 +62,12 @@ class ArtefattoService:
 
     def formato_messaggio_dps(self, artefatto_id: int, max_righe: int = 5) -> str:
         """Messaggio DPS pronto per messagebox."""
-        art = ArtefattoRepository.get(self._conn_art, artefatto_id)
+        art = ArtefattoRepository.get(self._art_conn(), artefatto_id)
         if not art:
             return "Artefatto non trovato."
         personaggi = []
-        for r in PersonaggioRepository.lista(self._conn):
-            pg = PersonaggioRepository.get(self._conn, r[0])
+        for r in PersonaggioRepository.lista(self._main_conn()):
+            pg = PersonaggioRepository.get(self._main_conn(), r[0])
             if pg:
                 personaggi.append(pg)
         risultati = DpsCalculator.ordina_per_miglior_personaggio(art, personaggi)
@@ -66,22 +76,22 @@ class ArtefattoService:
 
     # --- Operazioni ---
     def get_artefatto(self, artefatto_id: int) -> Optional[dict]:
-        return ArtefattoRepository.get(self._conn_art, artefatto_id)
+        return ArtefattoRepository.get(self._art_conn(), artefatto_id)
 
     def lista_artefatti_liberi_completi(self, slot: str) -> List[dict]:
         """Lista artefatti nel magazzino (non assegnati) per slot, dict completi per DPS."""
-        return ArtefattoRepository.lista_liberi(self._conn_art, slot)
+        return ArtefattoRepository.lista_liberi(self._art_conn(), slot)
 
     def lista_artefatti_per_equip(self, slot: str, personaggio_id: Optional[int] = None) -> List[dict]:
         """Assegnabili allo slot: pezzi liberi in magazzino + quello già sul personaggio."""
-        liberi = ArtefattoRepository.lista_liberi(self._conn_art, slot)
+        liberi = ArtefattoRepository.lista_liberi(self._art_conn(), slot)
         if not personaggio_id:
             return liberi
-        eq_ids = ArtefattoRepository.equip_map_for_personaggio(self._conn_art, personaggio_id)
+        eq_ids = ArtefattoRepository.equip_map_for_personaggio(self._art_conn(), personaggio_id)
         aid = eq_ids.get(slot)
         if not aid:
             return liberi
-        corrente = ArtefattoRepository.get(self._conn_art, aid)
+        corrente = ArtefattoRepository.get(self._art_conn(), aid)
         if corrente and not any(a["id"] == aid for a in liberi):
             return [corrente] + liberi
         return liberi
@@ -110,15 +120,15 @@ class ArtefattoService:
     def assegna_utilizzatore(self, artefatto_id: int, personaggio_id: Optional[int]) -> None:
         """Magazzino: nessun utilizzatore (None); altrimenti equipaggia al personaggio (stesso slot)."""
         if personaggio_id is None:
-            ArtefattoRepository.unassign_artefatto(self._conn_art, artefatto_id)
+            ArtefattoRepository.unassign_artefatto(self._art_conn(), artefatto_id)
             return
-        art = ArtefattoRepository.get(self._conn_art, artefatto_id)
+        art = ArtefattoRepository.get(self._art_conn(), artefatto_id)
         if not art:
             raise ValueError("Artefatto non trovato")
-        if PersonaggioRepository.get(self._conn, personaggio_id) is None:
+        if PersonaggioRepository.get(self._main_conn(), personaggio_id) is None:
             raise ValueError("Personaggio non trovato")
         slot = art["slot"]
-        ArtefattoRepository.set_equipaggiamento(self._conn_art, personaggio_id, slot, artefatto_id)
+        ArtefattoRepository.set_equipaggiamento(self._art_conn(), personaggio_id, slot, artefatto_id)
 
     def lista_artefatti_inventario_per_tabella(self) -> List[dict]:
         """Lista per tabella build: [{id, slot, set, main, val, score}, ...]."""
@@ -127,8 +137,8 @@ class ArtefattoService:
 
     def lista_artefatti_completa(self) -> List[dict]:
         """Magazzino globale: main + sub + utilizzatore (personaggio_id)."""
-        lista = ArtefattoRepository.lista(self._conn_art)
-        nomi = {r[0]: r[1] for r in PersonaggioRepository.lista(self._conn)}
+        lista = ArtefattoRepository.lista(self._art_conn())
+        nomi = {r[0]: r[1] for r in PersonaggioRepository.lista(self._main_conn())}
         out = []
         for a in lista:
             pid = a.get("assegna_a_id")
@@ -153,10 +163,10 @@ class ArtefattoService:
 
     def dettaglio_artefatto_json(self, artefatto_id: int) -> Optional[Dict[str, Any]]:
         """Singolo record per modale dettaglio / modifica."""
-        a = ArtefattoRepository.get(self._conn_art, artefatto_id)
+        a = ArtefattoRepository.get(self._art_conn(), artefatto_id)
         if not a:
             return None
-        nomi = {r[0]: r[1] for r in PersonaggioRepository.lista(self._conn)}
+        nomi = {r[0]: r[1] for r in PersonaggioRepository.lista(self._main_conn())}
         pid = a.get("assegna_a_id")
         util = nomi.get(pid) if pid else None
         if pid and util is None:
@@ -184,12 +194,12 @@ class ArtefattoService:
 
     def suggerimenti_personaggi_per_artefatto(self, artefatto_id: int) -> Dict[str, Any]:
         """Ranking personaggi salvati (punteggio DPS semplificato sul pezzo)."""
-        art = ArtefattoRepository.get(self._conn_art, artefatto_id)
+        art = ArtefattoRepository.get(self._art_conn(), artefatto_id)
         if not art:
             return {"artefatto_id": artefatto_id, "ranking": [], "messaggio": "Manufatto non trovato."}
         personaggi = []
-        for r in PersonaggioRepository.lista(self._conn):
-            pg = PersonaggioRepository.get(self._conn, r[0])
+        for r in PersonaggioRepository.lista(self._main_conn()):
+            pg = PersonaggioRepository.get(self._main_conn(), r[0])
             if pg:
                 personaggi.append(pg)
         if not personaggi:
@@ -201,7 +211,7 @@ class ArtefattoService:
         risultati = DpsCalculator.ordina_per_miglior_personaggio(art, personaggi)
         ranking = []
         for pid, nome, score in risultati:
-            pg = PersonaggioRepository.get(self._conn, pid)
+            pg = PersonaggioRepository.get(self._main_conn(), pid)
             ranking.append({
                 "personaggio_id": pid,
                 "nome": nome,
@@ -217,7 +227,7 @@ class ArtefattoService:
     def aggiorna_artefatto(self, artefatto_id: int, form_values: dict) -> None:
         """Aggiorna statistiche (livello, main, sub…). Slot: solo se il pezzo non è assegnato."""
         from core.validation import parse_number
-        ex = ArtefattoRepository.get(self._conn_art, artefatto_id)
+        ex = ArtefattoRepository.get(self._art_conn(), artefatto_id)
         if not ex:
             raise ValueError("Artefatto non trovato")
         slot_in = (form_values.get("slot") or ex.get("slot") or "fiore").strip()
@@ -243,7 +253,10 @@ class ArtefattoService:
             form_values.get("sub4_stat", "") or "",
             parse_number(form_values.get("sub4_val")),
         )
-        ArtefattoRepository.update(self._conn_art, artefatto_id, dati)
+        set_n = (dati[1] or "").strip()
+        if set_n:
+            register_extra_set(set_n)
+        ArtefattoRepository.update(self._art_conn(), artefatto_id, dati)
         if "personaggio_id" in form_values:
             raw_pid = form_values.get("personaggio_id")
             if raw_pid in (None, "", 0, "0"):
@@ -256,7 +269,7 @@ class ArtefattoService:
                 self.assegna_utilizzatore(artefatto_id, pid)
 
     def elimina_artefatto(self, artefatto_id: int) -> None:
-        if not ArtefattoRepository.delete(self._conn_art, artefatto_id):
+        if not ArtefattoRepository.delete(self._art_conn(), artefatto_id):
             raise ValueError("Artefatto non trovato")
 
     # --- Catalogo (filtraggio progressivo) ---
@@ -316,7 +329,10 @@ class ArtefattoService:
             form_values.get("sub4_stat", ""),
             parse_number(form_values.get("sub4_val")),
         )
-        aid = ArtefattoRepository.insert(self._conn_art, dati)
+        set_n = (form_values.get("set_nome") or "").strip()
+        if set_n:
+            register_extra_set(set_n)
+        aid = ArtefattoRepository.insert(self._art_conn(), dati)
         raw_pid = form_values.get("personaggio_id")
         if raw_pid not in (None, "", 0, "0"):
             try:

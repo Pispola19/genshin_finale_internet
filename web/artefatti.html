@@ -31,7 +31,7 @@
       <p class="page-hint page-hint-oneline">Registri e modifichi i pezzi qui; assegnazione nel riquadro blu; scheda <a href="personaggio.html">Personaggio</a> = solo lettura equip.</p>
     </div>
 
-    <div class="section" id="section-form-manufatto">
+    <div class="section inv-add-form" id="section-form-manufatto">
       <h2>➕ Aggiungi o modifica manufatto</h2>
       <p id="formModuloBanner" class="page-hint" hidden style="margin-bottom:0.75rem">Stai modificando il manufatto <strong>#<span id="formModuloId"></span></strong>. Salva per applicare, <strong>Annulla</strong> per tornare a nuovo pezzo.</p>
       <p style="color:var(--text-muted);margin-bottom:1rem;font-size:0.92rem">Pezzo sopra, assegnazione nel riquadro blu. <strong>AGGIUNGI</strong> / riga → <strong>Carica nel modulo</strong> → <strong>SALVA MODIFICHE</strong>.</p>
@@ -56,10 +56,26 @@
           <input type="number" id="stelle" value="5" min="1" max="5" style="width:50px">
         </div>
       </div>
-      <div class="form-group form-group-stack">
-        <label for="set_nome">Set (catalogo)</label>
-        <select id="set_nome" class="inv-set-select"><option value="">— Scegli set —</option></select>
+      <div class="form-row inv-set-dual-row">
+        <div class="form-group form-group-stack form-group-grow inv-set-col-catalogo">
+          <label for="set_nome">Set (catalogo)</label>
+          <select id="set_nome" class="inv-set-select"><option value="">— Scegli set —</option></select>
+        </div>
+        <div class="form-group form-group-stack form-group-grow inv-set-col-libero">
+          <input
+            type="text"
+            id="set_nome_custom"
+            class="inv-input-full inv-set-free-input"
+            autocomplete="off"
+            placeholder="Opzionale se non in elenco"
+            title="Facoltativo: compila solo se il set non è nel menu; altrimenti lascia vuoto e usa il catalogo"
+            aria-label="Nome set opzionale a mano libera; se compilato ha priorità sul menu Scegli set"
+          >
+        </div>
       </div>
+      <p class="page-hint" style="margin:0 0 0.65rem;font-size:0.82rem">
+        <strong>Set:</strong> menu catalogo e casella libera a fianco — spiegazione in <a href="istruzioni.html#manufatti-set-compilare">Come si usa</a>.
+      </p>
       <div class="form-group form-group-stack">
         <label for="nome_pezzo">Nome pezzo</label>
         <select id="nome_pezzo" class="inv-set-select"><option value="">— Scegli prima il set —</option></select>

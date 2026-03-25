@@ -1,3 +1,2 @@
-flask>=2.0.0,<4
-gunicorn>=21.0.0,<24
-Pillow>=9.0.0,<12
+# Installa il progetto e le dipendenze (vedi pyproject.toml).
+-e .

@@ -1,28 +1,11 @@
 """API Flask per Genshin Manager Web - espone servizi Python."""
-import os
-import sys
-from pathlib import Path
-
-# Aggiungi project root al path
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
+from config import PROJECT_ROOT
 from flask import Flask, request, jsonify, send_from_directory, redirect
+
+ROOT = PROJECT_ROOT
 
 app = Flask(__name__, static_folder=".", static_url_path="")
 app.config["JSON_AS_ASCII"] = False
-# Su Render impostare SECRET_KEY (es. generateValue nel blueprint).
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "solo-sviluppo-cambia-in-produzione")
-
-
-@app.after_request
-def _security_headers(response):
-    response.headers.setdefault("X-Content-Type-Options", "nosniff")
-    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
-    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-    return response
-
 
 SFONDI_DIR = ROOT / "sfondi"
 

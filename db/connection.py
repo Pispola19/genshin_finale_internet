@@ -1,18 +1,65 @@
 """Gestione connessioni database."""
+from __future__ import annotations
+
 import sqlite3
-from pathlib import Path
+import threading
+from typing import Optional
 
 from config import DB_PATH, ARTEFATTI_DB_PATH
 
+_tls = threading.local()
+_init_lock = threading.Lock()
+_schema_initialized = False
+
+
+def _ensure_schema_once() -> None:
+    """Esegue init/migrazioni una sola volta per processo (connessioni brevi, thread-safe)."""
+    global _schema_initialized
+    if _schema_initialized:
+        return
+    with _init_lock:
+        if _schema_initialized:
+            return
+        c_m = sqlite3.connect(DB_PATH)
+        c_a = sqlite3.connect(ARTEFATTI_DB_PATH)
+        try:
+            init_databases(c_m, c_a)
+        finally:
+            c_m.close()
+            c_a.close()
+        _schema_initialized = True
+
 
 def get_connection():
-    """Connessione al database principale."""
-    return sqlite3.connect(DB_PATH)
+    """Connessione al database principale per il thread corrente (Flask / gunicorn multi-thread)."""
+    _ensure_schema_once()
+    main: Optional[sqlite3.Connection] = getattr(_tls, "main", None)
+    if main is None:
+        main = sqlite3.connect(DB_PATH)
+        _tls.main = main
+        _tls.art = sqlite3.connect(ARTEFATTI_DB_PATH)
+    return main
 
 
 def get_artefatti_connection():
-    """Connessione al database artefatti."""
-    return sqlite3.connect(ARTEFATTI_DB_PATH)
+    """Connessione al database artefatti per il thread corrente (accoppiata a get_connection)."""
+    get_connection()
+    return _tls.art
+
+
+def close_thread_connections() -> None:
+    """Chiude le connessioni SQLite del thread corrente (es. uscita dalla GUI Tkinter)."""
+    for attr in ("art", "main"):
+        conn = getattr(_tls, attr, None)
+        if conn is not None:
+            try:
+                conn.close()
+            except sqlite3.Error:
+                pass
+        try:
+            delattr(_tls, attr)
+        except AttributeError:
+            pass
 
 
 def init_databases(conn_main, conn_artefatti):

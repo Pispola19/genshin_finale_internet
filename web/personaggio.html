@@ -78,7 +78,9 @@
         <div class="table-scroll">
         <table class="arma-table">
           <tr>
-            <th>Nome</th><th>Tipo</th><th>Liv</th><th>★</th><th>Stat</th><th>Val</th>
+            <th>Nome</th><th>Tipo</th><th>Liv</th><th>★</th>
+            <th title="Stat principale arma: sempre ATK base (numero da inserire)">ATK base</th>
+            <th title="Substat dell’arma (es. CR%, ER…)" colspan="2">Stat secondaria</th>
           </tr>
           <tr>
             <td><input type="text" id="arma_nome" placeholder="Nome arma"></td>
@@ -90,10 +92,12 @@
             </td>
             <td><input type="number" id="arma_livello" min="1" style="width:60px"></td>
             <td><input type="number" id="arma_stelle" min="1" max="5" style="width:50px"></td>
-            <td><input type="text" id="arma_stat" placeholder="Stat"></td>
+            <td><input type="number" id="arma_atk_base" placeholder="ATK" min="0" step="1" title="Valore ATK base dell’arma (come in inventario)" style="min-width:4.5rem"></td>
+            <td><input type="text" id="arma_stat" placeholder="Tipo stat" list="datalist_arma_stats"></td>
             <td><input type="number" id="arma_valore" placeholder="Val"></td>
           </tr>
         </table>
+        <datalist id="datalist_arma_stats"></datalist>
         </div>
       </div>
 

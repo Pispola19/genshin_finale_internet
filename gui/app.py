@@ -9,6 +9,13 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 from config import PROJECT_ROOT, SLOT_UI, SLOT_DB, ELEMENTI, TIPI_ARMA, STATS, SET_ARTEFATTI, MOSTRA_PULSANTE_HOYOLAB
+from core.manual_import import (
+    ImportParseError,
+    apply_manual_import,
+    list_character_choices,
+    parse_pasted_payload,
+    preview_summary,
+)
 from core.services import AppService
 from gui.widgets import AutocompleteCombobox, create_entry
 
@@ -84,7 +91,7 @@ class GenshinApp:
     def _build_ui(self):
         self.root = tk.Tk()
         self.root.title("Genshin Manager")
-        self.root.geometry("1200x1100")
+        self.root.geometry("1240x1120")
         self._build_menu()
         self._build_scrollable_main()
         self._build_personaggio_section()
@@ -96,6 +103,9 @@ class GenshinApp:
     def _build_menu(self):
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
+        data_m = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Dati", menu=data_m)
+        data_m.add_command(label="Import da copia (JSON / HoYoLAB manuale)…", command=self._import_da_copia)
         help_m = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Aiuto", menu=help_m)
         help_m.add_command(label="Istruzioni (facili)", command=self._mostra_istruzioni)
@@ -174,6 +184,119 @@ class GenshinApp:
         except Exception as e:
             messagebox.showerror("Errore", str(e))
 
+    def _import_da_copia(self):
+        """Import JSON incollato: nessun login HoYoLAB; vedi core/manual_import.py."""
+        win = tk.Toplevel(self.root)
+        win.title("Import dati — JSON manuale")
+        win.geometry("760x580")
+        win.minsize(560, 440)
+
+        hint = tk.Text(win, height=5, wrap="word", font=("Helvetica", 11), bg="#f4f6ff", relief="flat", padx=8, pady=8)
+        hint.pack(fill="x", padx=10, pady=(10, 4))
+        hint.insert(
+            "1.0",
+            "1) Accedi a HoYoLAB nel browser e apri Battle Chronicle.\n"
+            "2) F12 → Rete / Network → filtra XHR/fetch → seleziona un personaggio e individua una risposta JSON con nome, livello, fightPropMap (o propMap).\n"
+            "3) Tasto destro sulla risposta → Copia → Copia risposta (o salva JSON e incollalo qui).\n"
+            "4) Anteprima, poi Importa nuovo oppure Aggiorna scheda corrente.\n"
+            "Oppure incolla un JSON nel formato documentato in core/manual_import.py (chiavi: nome, livello, elemento, hp_flat, crit_rate, …).",
+        )
+        hint.config(state="disabled")
+
+        outer = tk.Frame(win)
+        outer.pack(fill="both", expand=True, padx=10, pady=6)
+        txt = tk.Text(outer, height=14, font=("Menlo", 10) if sys.platform == "darwin" else ("Consolas", 10))
+        ys = tk.Scrollbar(outer, command=txt.yview)
+        txt.config(yscrollcommand=ys.set)
+        txt.pack(side="left", fill="both", expand=True)
+        ys.pack(side="right", fill="y")
+
+        choice_fr = tk.Frame(win)
+        tk.Label(choice_fr, text="Se nel JSON ci sono più personaggi:").pack(side="left", padx=(0, 8))
+        choice_var = tk.StringVar()
+        choice_cb = ttk.Combobox(choice_fr, textvariable=choice_var, state="readonly", width=36)
+
+        preview_lbl = tk.Label(win, text="Premi Anteprima.", justify="left", anchor="nw", font=("Helvetica", 10))
+        preview_lbl.pack(fill="x", padx=10, pady=6)
+
+        parsed_holder: dict = {"p": None}
+
+        def refresh_preview(*_):
+            try:
+                p = parse_pasted_payload(txt.get("1.0", "end"))
+                parsed_holder["p"] = p
+                chs = list_character_choices(p)
+                if len(chs) > 1:
+                    names = [c["nome"] for c in chs]
+                    choice_cb["values"] = names
+                    if choice_var.get() not in names:
+                        choice_var.set(names[0])
+                    choice_cb.pack(side="left")
+                    choice_fr.pack(fill="x", padx=10, pady=(0, 4))
+                else:
+                    choice_fr.pack_forget()
+                preview_lbl.config(text=preview_summary(_effective_parsed()))
+            except ImportParseError as e:
+                parsed_holder["p"] = None
+                choice_fr.pack_forget()
+                preview_lbl.config(text=f"Errore: {e}")
+
+        def _effective_parsed():
+            p = parsed_holder["p"]
+            if not p:
+                return None
+            chs = list_character_choices(p)
+            if len(chs) <= 1:
+                return p
+            name = choice_var.get() or chs[0]["nome"]
+            sel = next((c for c in chs if c["nome"] == name), chs[0])
+            out = dict(p)
+            out["character"] = sel
+            return out
+
+        choice_cb.bind("<<ComboboxSelected>>", lambda e: preview_lbl.config(text=preview_summary(_effective_parsed())))
+
+        btns = tk.Frame(win)
+        btns.pack(fill="x", padx=10, pady=10)
+        tk.Button(btns, text="Anteprima", command=refresh_preview).pack(side="left", padx=4)
+        tk.Button(btns, text="Importa come nuovo personaggio", command=lambda: _do_import(True)).pack(side="left", padx=4)
+        btn_upd = tk.Button(btns, text="Aggiorna scheda aperta (ID corrente)", command=lambda: _do_import(False))
+        btn_upd.pack(side="left", padx=4)
+
+        def _do_import(as_new: bool):
+            try:
+                if parsed_holder["p"] is None:
+                    refresh_preview()
+                p = _effective_parsed()
+                if not p:
+                    messagebox.showwarning("Import", "Nessun dato valido: usa Anteprima dopo aver incollato il JSON.", parent=win)
+                    return
+                sid = None if as_new else self.selected_id
+                if not as_new and sid is None:
+                    messagebox.showwarning("Import", "Nessuna scheda selezionata: usa Lista o Importa come nuovo.", parent=win)
+                    return
+                ok, msg = self.service.valida_nome(p["character"]["nome"], sid if sid else None)
+                if not ok:
+                    messagebox.showerror("Import", msg, parent=win)
+                    return
+                new_id = apply_manual_import(self.service, p, sid, touch_equipment=False)
+                self.selected_id = new_id
+                dati = self.service.carica_dati_completi(new_id)
+                if dati:
+                    self._populate_form(dati)
+                win.destroy()
+                messagebox.showinfo("Import", f"Salvato. ID personaggio: {new_id}")
+            except ImportParseError as e:
+                messagebox.showerror("Import", str(e), parent=win)
+            except Exception as e:
+                messagebox.showerror("Import", str(e), parent=win)
+
+        def _sync_update_btn_state(_evt=None):
+            btn_upd.config(state="normal" if self.selected_id is not None else "disabled")
+
+        _sync_update_btn_state()
+        win.bind("<FocusIn>", _sync_update_btn_state)
+
     def _build_scrollable_main(self):
         canvas = tk.Canvas(self.root)
         scrollbar = tk.Scrollbar(self.root, orient="vertical", command=canvas.yview, width=25)
@@ -237,25 +360,58 @@ class GenshinApp:
     def _build_arma_section(self):
         frame = tk.LabelFrame(self.main_frame, text="ARMA")
         frame.pack(fill="x", padx=10, pady=5)
-        r1 = tk.Frame(frame)
-        r1.pack(fill="x", pady=5)
-        self.arma_nome_entry = create_entry(r1, "Nome", 25)
+        body = tk.Frame(frame)
+        body.pack(fill="x", pady=4, padx=6)
+        col_left = tk.Frame(body)
+        col_left.pack(side="left", fill="both", expand=True, padx=(0, 24))
+        col_right = tk.Frame(body)
+        col_right.pack(side="left", fill="y")
+
+        lw = 14
+
+        def row_label(parent, text):
+            return tk.Label(parent, text=text, width=lw, anchor="w")
+
+        # Colonna 1: nome, tipo, livello, stelle
+        r = tk.Frame(col_left)
+        r.pack(fill="x", pady=3)
+        row_label(r, "Nome").pack(side="left", padx=(0, 6))
+        self.arma_nome_entry = tk.Entry(r, width=34)
+        self.arma_nome_entry.pack(side="left", fill="x", expand=True)
+
+        r = tk.Frame(col_left)
+        r.pack(fill="x", pady=3)
+        row_label(r, "Tipo").pack(side="left", padx=(0, 6))
         self.tipo_var = tk.StringVar(value="Spada")
-        ft = tk.Frame(r1)
-        ft.pack(side="left", padx=10)
-        tk.Label(ft, text="Tipo").pack(side="left")
-        AutocompleteCombobox(ft, values=TIPI_ARMA, width=12, textvariable=self.tipo_var).pack(side="left")
-        self.arma_liv_entry = create_entry(r1, "Liv", 5)
-        self.arma_stelle_entry = create_entry(r1, "★", 5)
-        r2 = tk.Frame(frame)
-        r2.pack(fill="x", pady=5)
-        self.arma_atk_entry = create_entry(r2, "ATK", 8)
+        AutocompleteCombobox(r, values=TIPI_ARMA, width=18, textvariable=self.tipo_var).pack(side="left")
+
+        r = tk.Frame(col_left)
+        r.pack(fill="x", pady=3)
+        row_label(r, "Livello").pack(side="left", padx=(0, 6))
+        self.arma_liv_entry = tk.Entry(r, width=6)
+        self.arma_liv_entry.pack(side="left", padx=(0, 18))
+        row_label(r, "Stelle ★").pack(side="left", padx=(0, 6))
+        self.arma_stelle_entry = tk.Entry(r, width=6)
+        self.arma_stelle_entry.pack(side="left")
+
+        # Colonna 2: ATK base, stat secondaria, valore (campi larghi)
+        r = tk.Frame(col_right)
+        r.pack(fill="x", pady=3)
+        row_label(r, "ATK base").pack(side="left", padx=(0, 6))
+        self.arma_atk_entry = tk.Entry(r, width=10)
+        self.arma_atk_entry.pack(side="left")
+
+        r = tk.Frame(col_right)
+        r.pack(fill="x", pady=3)
+        row_label(r, "Stat secondaria").pack(side="left", padx=(0, 6))
         self.arma_stat_var = tk.StringVar()
-        fs = tk.Frame(r2)
-        fs.pack(side="left", padx=10)
-        tk.Label(fs, text="Stat").pack(side="left")
-        AutocompleteCombobox(fs, values=STATS, width=14, textvariable=self.arma_stat_var).pack(side="left")
-        self.arma_val_entry = create_entry(r2, "Val", 8)
+        AutocompleteCombobox(r, values=STATS, width=28, textvariable=self.arma_stat_var).pack(side="left")
+
+        r = tk.Frame(col_right)
+        r.pack(fill="x", pady=3)
+        row_label(r, "Valore").pack(side="left", padx=(0, 6))
+        self.arma_val_entry = tk.Entry(r, width=10)
+        self.arma_val_entry.pack(side="left")
 
     def _build_artefatti_section(self):
         frame = tk.LabelFrame(self.main_frame, text="ARTEFATTI EQUIPAGGIATI")
@@ -585,19 +741,28 @@ class GenshinApp:
             slot_var = tk.StringVar(value="fiore")
             slot_combo = AutocompleteCombobox(r1, values=SLOT_DB, width=10, textvariable=slot_var)
             slot_combo.pack(side="left")
-            tk.Label(r1, text="Set").pack(side="left", padx=(20, 5))
-            set_var = tk.StringVar()
-            set_combo = AutocompleteCombobox(r1, values=[], width=32, textvariable=set_var)
-            set_combo.pack(side="left")
-            tk.Label(r1, text="Nome").pack(side="left", padx=(20, 5))
+            tk.Label(r1, text="Nome pezzo").pack(side="left", padx=(20, 5))
             nome_var = tk.StringVar()
-            nome_combo = AutocompleteCombobox(r1, values=[], width=28, textvariable=nome_var)
+            nome_combo = AutocompleteCombobox(r1, values=[], width=36, textvariable=nome_var)
             nome_combo.pack(side="left")
             liv_e = create_entry(r1, "Liv", 5)
             stelle_e = create_entry(r1, "★", 5)
+            r_set = tk.Frame(f)
+            r_set.pack(fill="x", pady=2)
+            tk.Label(r_set, text="Set (catalogo)").pack(side="left", padx=(0, 5))
+            set_var = tk.StringVar()
+            set_combo = AutocompleteCombobox(r_set, values=[], width=34, textvariable=set_var)
+            set_combo.pack(side="left", padx=(0, 10))
+            tk.Label(r_set, text="Set libero (opz.)").pack(side="left", padx=(0, 5))
+            set_libero_var = tk.StringVar()
+            tk.Entry(r_set, textvariable=set_libero_var, width=30).pack(side="left")
+
+            def _set_effettivo():
+                return (set_libero_var.get() or "").strip() or (set_var.get() or "").strip()
+
             r1b = tk.Frame(f)
             r1b.pack(fill="x", pady=2)
-            q = lambda: set_combo.get() or nome_combo.get()
+            q = lambda: _set_effettivo() or nome_combo.get()
             if MOSTRA_PULSANTE_HOYOLAB:
                 tk.Button(r1b, text="Hoyolab", command=lambda: webbrowser.open(self.service.cerca_artefatto_online(q()))).pack(side="left", padx=(0, 5))
             tk.Button(r1b, text="Cerca web", command=lambda: webbrowser.open(self.service.cerca_artefatto_web(q()))).pack(side="left")
@@ -625,7 +790,7 @@ class GenshinApp:
                 slot = slot_var.get().strip().lower()
                 if slot not in SLOT_DB:
                     return
-                set_p = set_combo.get().strip()
+                set_p = _set_effettivo()
                 nome_p = nome_combo.get().strip()
                 righe = self.service.suggerimenti_artefatto(slot, set_p, nome_p)
                 nomi = sorted(set(r[1] for r in righe))
@@ -633,6 +798,7 @@ class GenshinApp:
                 nome_combo._values = nomi
 
             set_var.trace_add("write", lambda *_: add_win.after(50, _aggiorna_nome))
+            set_libero_var.trace_add("write", lambda *_: add_win.after(50, _aggiorna_nome))
             slot_var.trace_add("write", aggiorna_catalogo)
             aggiorna_catalogo()
             main_val_e = create_entry(r2, "Val", 10)
@@ -649,7 +815,7 @@ class GenshinApp:
             def ok():
                 self.service.aggiungi_artefatto({
                     "slot": slot_var.get(),
-                    "set_nome": set_combo.get(),
+                    "set_nome": _set_effettivo(),
                     "nome": nome_combo.get(),
                     "livello": liv_e.get(),
                     "stelle": stelle_e.get(),

@@ -31,8 +31,23 @@ const arma_nome = document.getElementById("arma_nome");
 const arma_tipo = document.getElementById("arma_tipo");
 const arma_livello = document.getElementById("arma_livello");
 const arma_stelle = document.getElementById("arma_stelle");
+const arma_atk_base = document.getElementById("arma_atk_base");
 const arma_stat = document.getElementById("arma_stat");
 const arma_valore = document.getElementById("arma_valore");
+
+/** Allineato a config.STATS (suggerimenti stat secondaria arma). */
+const ARMA_STAT_SUGGESTIONS = [
+  "HP", "HP%", "ATK", "ATK%", "DEF", "DEF%",
+  "EM", "ER", "CR", "CR%", "CD", "CD%",
+  "Pyro DMG", "Hydro DMG", "Electro DMG", "Cryo DMG", "Anemo DMG", "Geo DMG",
+  "Dendro DMG", "Physical DMG", "Healing Bonus", "Shield Strength",
+];
+
+function initArmaStatDatalist() {
+  const dl = document.getElementById("datalist_arma_stats");
+  if (!dl) return;
+  dl.innerHTML = ARMA_STAT_SUGGESTIONS.map(s => `<option value="${String(s).replace(/"/g, "&quot;")}"></option>`).join("");
+}
 const artLabels = { fiore: "art_fiore", piuma: "art_piuma", sabbie: "art_sabbie", calice: "art_calice", corona: "art_corona" };
 
 function escArtTxt(t) {
@@ -182,6 +197,7 @@ async function loadPersonaggio(id) {
     arma_tipo.value = d.arma.tipo || "Spada";
     arma_livello.value = d.arma.livello === "-" ? "" : d.arma.livello;
     arma_stelle.value = d.arma.stelle === "-" ? "" : d.arma.stelle;
+    if (arma_atk_base) arma_atk_base.value = d.arma.atk_base === "-" || d.arma.atk_base == null ? "" : d.arma.atk_base;
     arma_stat.value = d.arma.stat_secondaria || "";
     arma_valore.value = d.arma.valore_stat === "-" ? "" : d.arma.valore_stat;
   }
@@ -211,7 +227,15 @@ async function salva() {
   const payload = {
     id: currentId,
     personaggio: { nome: nome.value.trim(), livello: livello.value || 1, elemento: elemento.value, hp_flat: hp_flat.value, atk_flat: atk_flat.value, def_flat: def_flat.value, em_flat: em_flat.value, cr: cr.value, cd: cd.value, er: er.value },
-    arma: { nome: arma_nome.value.trim(), tipo: arma_tipo.value, livello: arma_livello.value, stelle: arma_stelle.value, stat_secondaria: arma_stat.value, valore_stat: arma_valore.value },
+    arma: {
+      nome: arma_nome.value.trim(),
+      tipo: arma_tipo.value,
+      livello: arma_livello.value,
+      stelle: arma_stelle.value,
+      atk_base: arma_atk_base ? arma_atk_base.value : "",
+      stat_secondaria: arma_stat.value,
+      valore_stat: arma_valore.value,
+    },
     costellazioni: Object.fromEntries(COST_IDS.map(k => [k, document.getElementById(k).value])),
     talenti: Object.fromEntries(TALENT_IDS.map(id => [id, document.getElementById(id).value])),
   };
@@ -236,6 +260,7 @@ function nuovo() {
   hp_flat.value = atk_flat.value = def_flat.value = em_flat.value = "";
   cr.value = cd.value = er.value = "";
   arma_nome.value = arma_stat.value = arma_valore.value = "";
+  if (arma_atk_base) arma_atk_base.value = "";
   arma_tipo.value = "Spada";
   arma_livello.value = arma_stelle.value = "";
   COST_IDS.forEach(k => { const el = document.getElementById(k); if (el) el.value = "0"; });
@@ -274,6 +299,7 @@ document.getElementById("btnSalva").addEventListener("click", salva);
 document.getElementById("btnCancella").addEventListener("click", cancella);
 
 async function initPersonaggioPage() {
+  initArmaStatDatalist();
   await Promise.all([loadPersonaggi(), loadCatalogoNomi()]);
 }
 initPersonaggioPage();
