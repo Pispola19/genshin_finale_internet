@@ -1,21 +1,21 @@
-# Blueprint Render.com — servizio pubblico: https://genshin-finale-internet-1.onrender.com
-# Collega questo repo in Render → Blueprint oppure Web Service manuale con gli stessi comandi.
-# Dati persistenti: aggiungi un Disco, montalo (es. /var/data) e imposta GINSHIN_DATA_DIR.
+# Blueprint Render.com: Web Service Python (Genshin Manager)
+# Dashboard Render → New Blueprint → incolla questo repo, oppure crea Web Service a mano con gli stessi comandi.
 services:
   - type: web
-    name: genshin-finale-internet-1
+    name: genshin-finale-internet
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn web.app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    startCommand: gunicorn web.app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.9"
       - key: SECRET_KEY
         generateValue: true
-      # Sicurezza: in Render → Environment aggiungi (non committare la password):
-      #   GENSHIN_WEB_WRITE_PASSWORD = password lunga per chi può salvare/importare in web
-      # Cookie HTTPS: RENDER è rilevato in web/app.py → SESSION_COOKIE_SECURE attivo.
-      # Opzionale: disco persistente Render (consigliato per non perdere DB ai redeploy)
+      # Sicurezza web (consigliato su Internet): password per salvare / import / manufatti.
+      # Crea la variabile a mano in Render → Environment (non committare la password nel repo):
+      #   GENSHIN_WEB_WRITE_PASSWORD = una password lunga che condividi solo con chi può modificare i dati
+      # Cookie di sessione HTTPS: su Render è attivo RENDER → SESSION_COOKIE_SECURE già gestito in app.
+      # Opzionale: monta un Disco e punta i DB persistenti:
       # - key: GINSHIN_DATA_DIR
       #   value: /var/data

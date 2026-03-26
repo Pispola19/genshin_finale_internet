@@ -178,7 +178,7 @@ nav.app-nav .nav-pages a.nav-login.active {
 }
 
 nav.app-nav .nav-pages a.nav-hoyolab {
-  margin-left: 0;
+  margin-left: auto;
   flex-shrink: 0;
   padding: 0.45rem 0.75rem 0.45rem 1rem;
   border-left: 1px solid rgba(255, 255, 255, 0.28);
@@ -971,6 +971,162 @@ th {
 
 .dashboard-errore-msg {
   color: rgba(180, 50, 40, 0.95);
+}
+
+/* Qualità DPS — banner Build + riquadro Dashboard (allineati a dps_quality API) */
+.dps-quality-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem 1rem;
+  max-width: 52rem;
+  margin: 0.85rem 0 0.5rem;
+  padding: 0.85rem 1.1rem;
+  border-radius: 10px;
+  border-width: 2px;
+  border-style: solid;
+  box-shadow: 0 2px 14px rgba(15, 23, 42, 0.12);
+}
+
+.dps-quality-banner__icon {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  margin-top: 0.1rem;
+  border-radius: 50%;
+  font-size: 1.15rem;
+  line-height: 2rem;
+  text-align: center;
+  font-weight: 800;
+}
+
+.dps-quality-banner--ok {
+  border-color: rgba(22, 163, 74, 0.65);
+  background: linear-gradient(135deg, rgba(240, 253, 244, 0.97), rgba(220, 252, 231, 0.92));
+  color: rgba(20, 83, 45, 0.98);
+}
+
+.dps-quality-banner--ok .dps-quality-banner__icon {
+  background: rgba(22, 163, 74, 0.2);
+}
+
+.dps-quality-banner--ok .dps-quality-banner__icon::before {
+  content: "✓";
+}
+
+.dps-quality-banner--warn {
+  border-color: rgba(217, 119, 6, 0.75);
+  background: linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(254, 243, 199, 0.95));
+  color: rgba(120, 53, 15, 0.98);
+}
+
+.dps-quality-banner--warn .dps-quality-banner__icon {
+  background: rgba(217, 119, 6, 0.22);
+}
+
+.dps-quality-banner--warn .dps-quality-banner__icon::before {
+  content: "!";
+  color: rgba(180, 60, 10, 1);
+}
+
+.dps-quality-banner__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dps-quality-banner__title {
+  display: block;
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+  margin: 0 0 0.35rem;
+}
+
+.dps-quality-banner__summary {
+  margin: 0 0 0.45rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  opacity: 0.96;
+}
+
+.dps-quality-banner__list {
+  margin: 0;
+  padding-left: 1.15rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.dps-quality-banner__list:empty {
+  display: none;
+}
+
+.dps-quality-banner--ok .dps-quality-banner__list {
+  opacity: 0.92;
+}
+
+.dps-quality-copy {
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: 0.78rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  color: inherit;
+  cursor: pointer;
+}
+
+.dps-quality-copy:hover {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+@media (max-width: 640px) {
+  .dps-quality-banner {
+    flex-wrap: wrap;
+  }
+  .dps-quality-copy {
+    width: 100%;
+    margin-top: 0.25rem;
+  }
+}
+
+.dashboard-dps-quality {
+  max-width: 1200px;
+  width: calc(100% - 3rem);
+  margin: 0 auto 1rem;
+  padding: 0.75rem 1.15rem;
+  border-radius: 10px;
+  border: 2px solid rgba(15, 23, 42, 0.14);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  box-shadow: 0 1px 8px rgba(15, 23, 42, 0.07);
+}
+
+.dashboard-dps-quality--ok {
+  border-color: rgba(22, 163, 74, 0.55);
+  background: rgba(240, 253, 244, 0.92);
+  color: rgba(20, 83, 45, 0.98);
+}
+
+.dashboard-dps-quality--warn {
+  border-color: rgba(217, 119, 6, 0.65);
+  background: rgba(255, 251, 235, 0.95);
+  color: rgba(120, 53, 15, 0.98);
+}
+
+.dashboard-dps-quality--neutral {
+  border-color: rgba(100, 116, 139, 0.35);
+  background: rgba(248, 250, 252, 0.92);
+  color: rgba(51, 65, 85, 0.95);
+}
+
+.dashboard-dps-quality__title {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.dashboard-dps-quality__stats {
+  font-size: 0.88rem;
+  opacity: 0.95;
 }
 
 .modal-footer-hint {
@@ -1875,4 +2031,28 @@ main.inv-page {
   max-height: 420px;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Rotazione — select Personaggio più leggibile */
+.page-rotation .section-autocomplete .form-row > label {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  min-width: 7.5rem;
+  flex: 0 0 auto;
+}
+
+.page-rotation .section-autocomplete .form-row > select#rotPgSelect {
+  flex: 1 1 26rem;
+  min-width: 26rem;
+  max-width: 100%;
+}
+
+@media (max-width: 720px) {
+  .page-rotation .section-autocomplete .form-row > label {
+    min-width: 100%;
+  }
+  .page-rotation .section-autocomplete .form-row > select#rotPgSelect {
+    min-width: 0;
+    width: 100%;
+  }
 }

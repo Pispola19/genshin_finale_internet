@@ -5,6 +5,8 @@ logs/
 *.egg-info/
 # Database locale (non versionare dati utente)
 *.db
+*.db.bak_*
+*hoyolab_import_log.jsonl
 user_artifact_sets.json
 # Snapshot automatici (checkpoint DB)
 checkpoints/

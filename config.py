@@ -12,9 +12,11 @@ if _data_override:
     _data_root.mkdir(parents=True, exist_ok=True)
     DB_PATH = _data_root / "genshin.db"
     ARTEFATTI_DB_PATH = _data_root / "artefatti.db"
+    IMPORT_LOG_PATH = _data_root / "hoyolab_import_log.jsonl"
 else:
     DB_PATH = PROJECT_ROOT / "genshin.db"
     ARTEFATTI_DB_PATH = PROJECT_ROOT / "artefatti.db"
+    IMPORT_LOG_PATH = PROJECT_ROOT / "hoyolab_import_log.jsonl"
 
 # Slot artefatti
 SLOT_UI = ("FIORE", "PIUMA", "SABBIE", "CALICE", "CORONA")

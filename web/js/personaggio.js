@@ -351,12 +351,23 @@ if (location.hash === "#import") {
   history.replaceState(null, "", location.pathname + location.search);
 }
 
+function importModeValue() {
+  const sel = document.getElementById("importMode");
+  const v = sel && sel.value ? String(sel.value).trim().toLowerCase() : "update";
+  if (v === "replace" || v === "update" || v === "append_dedup" || v === "append_force") return v;
+  return "update";
+}
+
 async function runImportPreview() {
   if (!importRaw) return;
   const r = await fetch(`${API}/personaggio/import-incolla`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ raw: importRaw.value, preview: true }),
+    body: JSON.stringify({
+      raw: importRaw.value,
+      preview: true,
+      import_mode: importModeValue(),
+    }),
   });
   let data = {};
   try {
@@ -369,10 +380,32 @@ async function runImportPreview() {
     return;
   }
   if (importPreview) {
-    importPreview.textContent = data.summary || "";
+    let block = data.summary || "";
+    if (data.stats && typeof data.stats === "object") {
+      const s = data.stats;
+      block =
+        `Modalità manufatti: ${String(data.import_mode || importModeValue())}\n` +
+        `Personaggi: ${s.n_characters != null ? s.n_characters : "—"} · ` +
+        `Armi: ${s.n_weapons != null ? s.n_weapons : "—"} · ` +
+        `Manufatti: ${s.n_relics != null ? s.n_relics : "—"} ` +
+        `(${s.n_relics_incomplete != null ? s.n_relics_incomplete : "—"} incompleti)\n` +
+        (data.parse_skips && data.parse_skips.length
+          ? `Scartati in lettura: ${data.parse_skips.length}\n`
+          : "") +
+        "\n" +
+        block;
+    }
+    importPreview.textContent = block;
     importPreview.hidden = false;
   }
-  if (importChoiceWrap && importChoiceNome && Array.isArray(data.choices) && data.choices.length > 1) {
+  if (data.bulk && importChoiceWrap) {
+    importChoiceWrap.hidden = true;
+  } else if (
+    importChoiceWrap &&
+    importChoiceNome &&
+    Array.isArray(data.choices) &&
+    data.choices.length > 1
+  ) {
     importChoiceWrap.hidden = false;
     importChoiceNome.innerHTML = "";
     data.choices.forEach((n) => {
@@ -390,7 +423,7 @@ document.getElementById("importPreviewBtn")?.addEventListener("click", runImport
 
 async function doImport(asNew) {
   if (!importRaw) return;
-  const payload = { raw: importRaw.value, preview: false };
+  const payload = { raw: importRaw.value, preview: false, import_mode: importModeValue() };
   if (importChoiceWrap && !importChoiceWrap.hidden && importChoiceNome && importChoiceNome.value) {
     payload.character_nome = importChoiceNome.value;
   }
@@ -442,7 +475,18 @@ async function doImport(asNew) {
     mainEl.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  alert("Import completato — scheda aggiornata.\n\n" + (data.summary || ""));
+  let msg = data.summary || "";
+  if (data.bulk) {
+    msg =
+      `Import gruppo: ${data.imported != null ? data.imported : "?"} personaggi salvati.\n` +
+      (data.errors && data.errors.length
+        ? "\nAvvisi: " + data.errors.map((e) => (e.nome || "?") + ": " + (e.error || "")).join("; ")
+        : "") +
+      "\n\n" + msg;
+  } else {
+    msg = "Import completato — scheda aggiornata.\n\n" + msg;
+  }
+  alert(msg);
 }
 
 document.getElementById("importNewBtn")?.addEventListener("click", () => doImport(true));

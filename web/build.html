@@ -18,7 +18,6 @@
       <a href="dashboard.html">Dashboard</a>
       <a href="personaggio.html#import" class="nav-import">Import</a>
       <a href="istruzioni.html">Come si usa</a>
-      <a href="login.html" class="nav-login">Accedi</a>
       <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
     </div>
   </nav>
@@ -71,6 +70,16 @@
           <div class="stat-row">DPS (score×10): <span id="opt_dps">—</span></div>
           <div class="stat-row">Proxy danno: <span id="opt_damage_proxy">—</span></div>
         </div>
+      </div>
+
+      <div id="buildDpsQualityBanner" class="dps-quality-banner" role="status" aria-live="polite" hidden>
+        <span class="dps-quality-banner__icon" aria-hidden="true"></span>
+        <div class="dps-quality-banner__text">
+          <strong id="buildDpsQualityTitle" class="dps-quality-banner__title"></strong>
+          <p id="buildDpsQualitySummary" class="dps-quality-banner__summary"></p>
+          <ul id="buildDpsQualityList" class="dps-quality-banner__list"></ul>
+        </div>
+        <button type="button" id="btnCopyDpsQuality" class="btn dps-quality-copy" title="Copia oggetto qualità DPS (JSON) negli appunti">Copia JSON</button>
       </div>
 
       <p class="page-hint" id="buildModelHint" style="font-size:0.88rem;color:var(--text-muted);max-width:52rem"></p>

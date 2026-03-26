@@ -4,7 +4,12 @@ from __future__ import annotations
 import json
 import unittest
 
-from core.manual_import import ImportParseError, build_forms_for_salva_completo, parse_pasted_payload
+from core.manual_import import (
+    ImportParseError,
+    build_forms_for_salva_completo,
+    parse_pasted_payload,
+    preview_summary,
+)
 
 
 class ManualImportStressTest(unittest.TestCase):
@@ -129,6 +134,99 @@ class ManualImportStressTest(unittest.TestCase):
         p = parse_pasted_payload(outer)
         self.assertEqual(p["character"]["nome"], "Yae")
         self.assertEqual(p["character"]["hp_flat"], 100)
+
+    def test_hoyolab_envelope_bulk_avatars(self):
+        payload = {
+            "retcode": 0,
+            "message": "OK",
+            "data": {
+                "avatars": [
+                    {
+                        "name": "Varka",
+                        "element": "Anemo",
+                        "level": 90,
+                        "actived_constellation_num": 0,
+                        "weapon": {
+                            "name": "Orgoglio celeste",
+                            "type": 11,
+                            "level": 90,
+                            "rarity": 5,
+                        },
+                        "relics": [
+                            {
+                                "pos": 1,
+                                "name": "Fiore X",
+                                "level": 20,
+                                "rarity": 5,
+                                "set": {"name": "Set prova"},
+                                "pos_name": "Fiore della vita",
+                            }
+                        ],
+                    },
+                    {
+                        "name": "#Viaggiat{M#ore}{F#rice}",
+                        "element": "Electro",
+                        "level": 90,
+                        "actived_constellation_num": 6,
+                        "weapon": {"name": "Spada", "type": 1, "level": 90, "rarity": 4},
+                        "relics": [],
+                    },
+                ]
+            },
+        }
+        p = parse_pasted_payload(json.dumps(payload))
+        self.assertTrue(p.get("bulk"))
+        self.assertEqual(len(p["imports"]), 2)
+        self.assertEqual(p["imports"][0]["weapon"]["tipo"], "Claymore")
+        self.assertEqual(p["imports"][0]["weapon"]["stelle"], 5)
+        self.assertEqual(len(p["imports"][0]["relics_raw"]), 1)
+        self.assertEqual(p["imports"][1]["character"]["nome"], "Traveler")
+        self.assertEqual(p["imports"][1]["costellazioni_form"]["c6"], "1")
+        s = preview_summary(p)
+        self.assertIn("2 personaggi", s)
+        _, _, fc, _ = build_forms_for_salva_completo(p["imports"][1])
+        self.assertEqual(fc["c1"], "1")
+        self.assertEqual(fc["c6"], "1")
+
+    def test_retcode_error(self):
+        with self.assertRaises(ImportParseError) as ctx:
+            parse_pasted_payload(json.dumps({"retcode": -1, "data": {}}))
+        self.assertIn("retcode", str(ctx.exception).lower())
+
+    def test_hoyolab_strict_validate_missing_name(self):
+        from core.hoyolab_import import validate_hoyolab_bulk_envelope
+
+        with self.assertRaises(ImportParseError) as ctx:
+            validate_hoyolab_bulk_envelope(
+                {"retcode": 0, "data": {"avatars": [{"level": 90}]}}
+            )
+        self.assertIn("name", str(ctx.exception).lower())
+
+    def test_hoyolab_strict_validate_missing_data(self):
+        from core.hoyolab_import import validate_hoyolab_bulk_envelope
+
+        with self.assertRaises(ImportParseError) as ctx:
+            validate_hoyolab_bulk_envelope({"retcode": 0})
+        self.assertIn("data", str(ctx.exception).lower())
+
+    def test_import_mode_update_calls_service(self):
+        from unittest.mock import MagicMock
+
+        from core.manual_import import apply_manual_import
+
+        svc = MagicMock()
+        svc.salva_completo.return_value = 7
+        p = {
+            "character": {"nome": "X", "livello": 90, "elemento": "Pyro"},
+            "weapon": None,
+            "costellazioni_form": None,
+            "relics_raw": [{"pos": 1, "name": "a", "set": {"name": "S"}, "level": 20, "rarity": 5}],
+        }
+        apply_manual_import(svc, p, None, touch_equipment=True, import_mode="update")
+        svc.apply_hoyo_relic_import.assert_called_once()
+        args = svc.apply_hoyo_relic_import.call_args[0]
+        self.assertEqual(args[0], 7)
+        self.assertEqual(args[2], "update")
 
 
 if __name__ == "__main__":

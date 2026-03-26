@@ -18,7 +18,6 @@
       <a href="dashboard.html">Dashboard</a>
       <a href="#import" class="nav-import" id="navImportLink">Import</a>
       <a href="istruzioni.html">Come si usa</a>
-      <a href="login.html" class="nav-login">Accedi</a>
       <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
     </div>
   </nav>
@@ -170,6 +169,15 @@
       <p class="modal-hint">Incolla la risposta JSON da DevTools (Rete) o il formato descritto nella documentazione. Nessun login HoYoLAB.</p>
       <label class="import-label" for="importRaw">JSON / testo</label>
       <textarea id="importRaw" class="import-textarea" rows="12" spellcheck="false" placeholder='Incolla qui…'></textarea>
+      <div class="form-group import-mode-wrap">
+        <label for="importMode">Manufatti HoYoLab</label>
+        <select id="importMode" class="import-mode-select">
+          <option value="replace">Sostituisci equip (rimuove i pezzi attuali sul personaggio)</option>
+          <option value="update" selected>Unisci per slot (non cancella altri pezzi; stat vuote HoYo → restano quelle salvate)</option>
+          <option value="append_dedup">Solo magazzino (dedup: evita duplicati identici) / storico</option>
+          <option value="append_force">Solo magazzino (force: permette duplicati) / storico</option>
+        </select>
+      </div>
       <div class="form-group import-choice-wrap" id="importChoiceWrap" hidden>
         <label for="importChoiceNome">Personaggio nel JSON (più di uno)</label>
         <select id="importChoiceNome"></select>

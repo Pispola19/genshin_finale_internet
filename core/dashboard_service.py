@@ -27,15 +27,27 @@ class DashboardService:
                 "team_migliore": {"personaggi": [], "power": 0},
                 "top_5": [],
                 "build_migliorabili": [],
+                "dps_quality": {
+                    "ready": 0,
+                    "partial": 0,
+                    "summary_it": "Nessun personaggio salvato: qualità DPS non calcolabile.",
+                },
             }
 
         # Per ogni personaggio, DPS da build
         con_dps = []
+        ready = 0
+        partial = 0
         for pid, nome, livello, elemento in righe:
             analisi = self._build.analisi_build(pid)
             if analisi:
                 dps = analisi["build_attuale"].get("dps", 0)
                 diff = analisi.get("differenza", {}).get("dps", 0)
+                q = analisi.get("dps_quality") or {}
+                if q.get("ready"):
+                    ready += 1
+                else:
+                    partial += 1
                 con_dps.append({
                     "id": pid,
                     "nome": nome,
@@ -52,6 +64,11 @@ class DashboardService:
                 "team_migliore": {"personaggi": [], "power": 0},
                 "top_5": [],
                 "build_migliorabili": [],
+                "dps_quality": {
+                    "ready": 0,
+                    "partial": 0,
+                    "summary_it": "Nessun dato DPS disponibile.",
+                },
             }
 
         # Top personaggio (DPS massimo)
@@ -92,4 +109,12 @@ class DashboardService:
             "team_migliore": team_migliore,
             "top_5": top_5,
             "build_migliorabili": migliorabili,
+            "dps_quality": {
+                "ready": ready,
+                "partial": partial,
+                "summary_it": (
+                    f"✅ {ready} personaggi pronti per DPS."
+                    + (f" ⚠ {partial} con dati incompleti (DPS non affidabile)." if partial else "")
+                ),
+            },
         }

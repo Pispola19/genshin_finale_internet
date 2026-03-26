@@ -113,9 +113,20 @@ class WebApiStressTest(unittest.TestCase):
         self.assertIn("confronto", data)
         self.assertIn("slot", data["confronto"])
         self.assertIn("set_proxy", data["confronto"])
+        self.assertIn("dps_quality", data)
+        dq = data["dps_quality"]
+        self.assertIn("ready", dq)
+        self.assertIn("status_badge_it", dq)
+        self.assertIn("summary_it", dq)
+        self.assertIn("warnings_it", dq)
 
     def test_api_dashboard_and_teams(self) -> None:
         self._get_many("/api/dashboard", times=30)
+        dash = self.client.get("/api/dashboard")
+        self.assertEqual(dash.status_code, 200)
+        dj = dash.get_json()
+        self.assertIn("dps_quality", dj)
+        self.assertIn("summary_it", dj["dps_quality"])
         self._get_many("/api/teams", times=30)
         rv = self.client.post("/api/teams/calcola", json={"personaggi": []})
         self.assertEqual(rv.status_code, 200)

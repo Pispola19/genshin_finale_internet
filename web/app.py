@@ -2,6 +2,7 @@
 import os
 import secrets
 from datetime import timedelta
+from typing import Optional
 
 from config import PROJECT_ROOT
 from flask import Flask, request, jsonify, send_from_directory, redirect, session
@@ -160,6 +161,8 @@ def api_salva_personaggio():
 @require_write_auth
 def api_personaggio_import_incolla():
     """Import manuale da JSON incollato (stesso parser della GUI Tk)."""
+    from core.hoyolab_import import compute_hoyo_preview_stats, normalize_import_mode
+    from core.import_log import append_import_log
     from core.manual_import import (
         ImportParseError,
         apply_manual_import,
@@ -169,6 +172,7 @@ def api_personaggio_import_incolla():
     )
 
     j = request.get_json() or {}
+    import_mode = normalize_import_mode(j.get("import_mode"))
     raw = j.get("raw")
     if not isinstance(raw, str):
         raw = ""
@@ -178,7 +182,7 @@ def api_personaggio_import_incolla():
         return jsonify({"error": str(e)}), 400
 
     character_nome = (j.get("character_nome") or "").strip()
-    if character_nome:
+    if character_nome and not parsed.get("bulk"):
         chs = list_character_choices(parsed)
         sel = next((c for c in chs if (c.get("nome") or "") == character_nome), None)
         if sel:
@@ -187,18 +191,23 @@ def api_personaggio_import_incolla():
     preview_only = bool(j.get("preview"))
     if preview_only:
         chs = list_character_choices(parsed)
+        stats = compute_hoyo_preview_stats(parsed)
         out = {
             "ok": True,
             "summary": preview_summary(parsed),
             "nome": (parsed.get("character") or {}).get("nome"),
+            "bulk": bool(parsed.get("bulk")),
+            "import_count": len(parsed.get("imports") or []) if parsed.get("bulk") else 1,
+            "stats": stats,
+            "import_mode": import_mode,
+            "parse_skips": parsed.get("parse_skips") or [],
         }
         names = [c.get("nome") for c in chs if c.get("nome")]
-        if len(names) > 1:
+        if len(names) > 1 and not parsed.get("bulk"):
             out["choices"] = names
         return jsonify(out)
 
     svc = get_service()
-    nome_pg = (parsed.get("character") or {}).get("nome") or ""
     id_pg = j.get("id")
     if id_pg is not None:
         try:
@@ -206,22 +215,121 @@ def api_personaggio_import_incolla():
         except (TypeError, ValueError):
             id_pg = None
 
-    ok_nome, msg = svc.valida_nome(nome_pg, id_pg if id_pg else None)
+    if parsed.get("bulk"):
+        imports = list(parsed.get("imports") or [])
+        if character_nome:
+            imports = [
+                i
+                for i in imports
+                if ((i.get("character") or {}).get("nome") or "") == character_nome
+            ]
+        if not imports:
+            return jsonify({"error": "Nessun personaggio da importare (filtro nome o elenco vuoto)."}), 400
+        last_id: Optional[int] = None
+        errors: list = []
+        ok_count = 0
+        imported_names: list = []
+        for imp in imports:
+            nome_i = (imp.get("character") or {}).get("nome") or ""
+            if not nome_i:
+                continue
+            merge_id = svc.id_per_nome(nome_i)
+            ok_nome, msg = svc.valida_nome(nome_i, merge_id)
+            if not ok_nome:
+                errors.append({"nome": nome_i, "error": msg})
+                continue
+            try:
+                last_id = apply_manual_import(
+                    svc, imp, merge_id, touch_equipment=None, import_mode=import_mode
+                )
+                ok_count += 1
+                imported_names.append(nome_i)
+            except Exception as e:
+                errors.append({"nome": nome_i, "error": str(e)})
+        if ok_count == 0:
+            append_import_log(
+                {
+                    "source": "web",
+                    "bulk": True,
+                    "import_mode": import_mode,
+                    "imported_ok": 0,
+                    "errors": errors,
+                    "parse_skips": parsed.get("parse_skips") or [],
+                    "imported_names": imported_names,
+                    "stats": compute_hoyo_preview_stats(parsed),
+                }
+            )
+            return jsonify(
+                {
+                    "error": "Import non riuscito per nessun personaggio.",
+                    "details": errors,
+                }
+            ), 400
+        dati = svc.carica_dati_completi(last_id) if last_id else None
+        stats = compute_hoyo_preview_stats(parsed)
+        append_import_log(
+            {
+                "source": "web",
+                "bulk": True,
+                "import_mode": import_mode,
+                "imported_ok": ok_count,
+                "errors": errors,
+                "parse_skips": parsed.get("parse_skips") or [],
+                "imported_names": imported_names,
+                "stats": stats,
+            }
+        )
+        return jsonify(
+            {
+                "ok": True,
+                "bulk": True,
+                "id": last_id,
+                "imported": ok_count,
+                "errors": errors,
+                "summary": preview_summary(parsed),
+                "dati": dati,
+                "import_mode": import_mode,
+                "stats": stats,
+                "parse_skips": parsed.get("parse_skips") or [],
+            }
+        )
+
+    nome_pg = (parsed.get("character") or {}).get("nome") or ""
+    merge_id = id_pg if id_pg is not None else svc.id_per_nome(nome_pg)
+    ok_nome, msg = svc.valida_nome(nome_pg, merge_id)
     if not ok_nome:
         return jsonify({"error": msg}), 400
 
     try:
-        new_id = apply_manual_import(svc, parsed, id_pg, touch_equipment=False)
+        new_id = apply_manual_import(
+            svc, parsed, merge_id, touch_equipment=None, import_mode=import_mode
+        )
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
     dati = svc.carica_dati_completi(new_id)
+    stats = compute_hoyo_preview_stats(parsed)
+    append_import_log(
+        {
+            "source": "web",
+            "bulk": False,
+            "import_mode": import_mode,
+            "imported_ok": 1,
+            "errors": [],
+            "parse_skips": parsed.get("parse_skips") or [],
+            "stats": stats,
+            "personaggio": (parsed.get("character") or {}).get("nome"),
+        }
+    )
     return jsonify(
         {
             "ok": True,
             "id": new_id,
             "summary": preview_summary(parsed),
             "dati": dati,
+            "import_mode": import_mode,
+            "stats": stats,
+            "parse_skips": parsed.get("parse_skips") or [],
         }
     )
 

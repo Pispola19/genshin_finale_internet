@@ -34,6 +34,11 @@ const diff_er_em = document.getElementById("diff_er_em");
 const curr_damage_proxy = document.getElementById("curr_damage_proxy");
 const opt_damage_proxy = document.getElementById("opt_damage_proxy");
 const buildModelHint = document.getElementById("buildModelHint");
+const buildDpsQualityBanner = document.getElementById("buildDpsQualityBanner");
+const buildDpsQualityTitle = document.getElementById("buildDpsQualityTitle");
+const buildDpsQualitySummary = document.getElementById("buildDpsQualitySummary");
+const buildDpsQualityList = document.getElementById("buildDpsQualityList");
+const btnCopyDpsQuality = document.getElementById("btnCopyDpsQuality");
 const curr_bonus_set = document.getElementById("curr_bonus_set");
 const curr_riepilogo_slots = document.getElementById("curr_riepilogo_slots");
 const opt_bonus_set = document.getElementById("opt_bonus_set");
@@ -86,6 +91,25 @@ function suggestions_nome_personaggio(query) {
     const id = id_salvato_per_nome(nome_str);
     return { nome: nome_str, id, salvato: id != null };
   });
+}
+
+function render_dps_quality_banner(q) {
+  if (!buildDpsQualityBanner || !buildDpsQualityTitle) return;
+  const ready = !!(q && q.ready);
+  buildDpsQualityBanner.hidden = false;
+  buildDpsQualityBanner.classList.remove("dps-quality-banner--ok", "dps-quality-banner--warn");
+  buildDpsQualityBanner.classList.add(ready ? "dps-quality-banner--ok" : "dps-quality-banner--warn");
+  buildDpsQualityTitle.textContent =
+    (q && q.status_badge_it) || (ready ? "DPS affidabile" : "DPS non affidabile");
+  if (buildDpsQualitySummary) {
+    buildDpsQualitySummary.textContent = (q && q.summary_it) || "";
+  }
+  const warns = Array.isArray(q && q.warnings_it) ? q.warnings_it : [];
+  if (buildDpsQualityList) {
+    buildDpsQualityList.innerHTML = warns.length
+      ? warns.map((w) => `<li>${escape_html(String(w))}</li>`).join("")
+      : "";
+  }
 }
 
 function escape_html(s) {
@@ -368,6 +392,7 @@ function render_build(data) {
   if (buildModelHint) {
     buildModelHint.textContent = data.dps_model_note_it || "";
   }
+  render_dps_quality_banner(data.dps_quality || {});
 
   render_slot_diff_table(buildSlotDiffBody, confronto);
   render_set_impact(buildSetImpactSummary, buildSetImpactLines, confronto);
@@ -430,6 +455,26 @@ function confronta() {
   } else {
     alert("Calcola prima la build.");
   }
+}
+
+if (btnCopyDpsQuality) {
+  btnCopyDpsQuality.addEventListener("click", async () => {
+    if (!lastBuildData || !lastBuildData.dps_quality) {
+      alert("Calcola prima la build per esportare la qualità DPS.");
+      return;
+    }
+    const text = JSON.stringify(lastBuildData.dps_quality, null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      const prev = btnCopyDpsQuality.textContent;
+      btnCopyDpsQuality.textContent = "Copiato";
+      setTimeout(() => {
+        btnCopyDpsQuality.textContent = prev;
+      }, 1800);
+    } catch {
+      alert("Impossibile copiare negli appunti.");
+    }
+  });
 }
 
 btn_calcola.addEventListener("click", calcola_build);

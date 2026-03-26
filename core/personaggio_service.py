@@ -2,7 +2,7 @@
 PersonaggioService - logica personaggio, arma, costellazioni, talenti, equipaggiamento.
 Tutte le chiamate ai Repository per personaggi passano da qui.
 """
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from core.validation import parse_number, validate_nome
 from db.connection import close_thread_connections, get_connection, get_artefatti_connection
@@ -57,6 +57,10 @@ class PersonaggioService:
         if PersonaggioRepository.nome_esiste(self.conn, nome, escludi_id):
             return False, f"Il nome '{nome}' è già usato."
         return True, ""
+
+    def id_per_nome(self, nome: str) -> Optional[int]:
+        """Id personaggio se esiste una scheda con questo nome, altrimenti None."""
+        return PersonaggioRepository.id_per_nome(self.conn, nome)
 
     # --- Fetch dati (ritorna strutture pronte per UI) ---
     @staticmethod
@@ -301,3 +305,248 @@ class PersonaggioService:
             d.get("stat_secondaria"),
             parse_number(d.get("valore_stat")) if "valore_stat" in d else d.get("valore_stat")
         )
+
+    def replace_equipment_from_hoyo_relics(self, personaggio_id: int, relics: List[dict]) -> None:
+        """
+        Sostituisce i manufatti equipaggiati dal personaggio con nuove righe ricavate
+        da un array ``relics`` stile API HoYoLab (battle chronicle).
+        """
+        from db.artifact_catalog import register_extra_set
+
+        conn_art = self.conn_art
+        cur = conn_art.cursor()
+        cur.execute("SELECT id FROM artefatti WHERE assegna_a_id=?", (personaggio_id,))
+        old_ids = [r[0] for r in cur.fetchall()]
+        for aid in old_ids:
+            ArtefattoRepository.delete(conn_art, aid)
+
+        for rel in relics:
+            if not isinstance(rel, dict):
+                continue
+            row, slot = _hoyo_relic_row_and_slot(rel)
+            if not row or not slot:
+                continue
+            set_n = (row[1] or "").strip()
+            if set_n:
+                register_extra_set(set_n)
+            new_id = ArtefattoRepository.insert(conn_art, row)
+            ArtefattoRepository.set_equipaggiamento(conn_art, personaggio_id, slot, new_id)
+
+    def append_hoyo_relics_to_warehouse(self, relics: List[dict], *, dedup: bool = True) -> int:
+        """Aggiunge solo righe in inventario (non equipaggiate).
+
+        dedup=True: evita duplicati identici nello stesso stato di inventario usando chiave
+        (slot, set_nome, livello, stelle).
+        """
+        from db.artifact_catalog import register_extra_set
+
+        conn_art = self.conn_art
+        inserted = 0
+        cur = conn_art.cursor()
+        for rel in relics:
+            if not isinstance(rel, dict):
+                continue
+            row, slot = _hoyo_relic_row_and_slot(rel)
+            if not row or not slot:
+                continue
+            set_n = (row[1] or "").strip()
+            if set_n:
+                register_extra_set(set_n)
+
+            if dedup:
+                # Chiave dedup basata su slot/set/livello/rarita (richiesta utente).
+                # Nota: non considera main/sub per evitare drift tra payload incompleti.
+                cur.execute(
+                    """
+                    SELECT 1 FROM artefatti
+                    WHERE assegna_a_id IS NULL
+                      AND slot=? AND set_nome=? AND livello=? AND stelle=?
+                    LIMIT 1
+                    """,
+                    (row[0], row[1], row[3], row[4]),
+                )
+                if cur.fetchone():
+                    continue
+
+            ArtefattoRepository.insert(conn_art, row)
+            inserted += 1
+        return inserted
+
+    def update_equipment_from_hoyo_relics(self, personaggio_id: int, relics: List[dict]) -> None:
+        """Aggiorna solo gli slot presenti nel JSON; merge delle stat se HoYo è vuoto; non cancella altri pezzi."""
+        from db.artifact_catalog import register_extra_set
+
+        conn_art = self.conn_art
+        eq = ArtefattoRepository.equip_map_for_personaggio(conn_art, personaggio_id)
+        for rel in relics:
+            if not isinstance(rel, dict):
+                continue
+            row, slot = _hoyo_relic_row_and_slot(rel)
+            if not row or not slot:
+                continue
+            set_n = (row[1] or "").strip()
+            if set_n:
+                register_extra_set(set_n)
+            aid = eq.get(slot)
+            if aid:
+                ex = ArtefattoRepository.get(conn_art, aid)
+                if ex:
+                    merged = _overlay_hoyo_row_on_stored(_art_row_to_tuple(ex), row)
+                    ArtefattoRepository.update(conn_art, aid, merged)
+                    continue
+            new_id = ArtefattoRepository.insert(conn_art, row)
+            ArtefattoRepository.set_equipaggiamento(conn_art, personaggio_id, slot, new_id)
+            eq[slot] = new_id
+
+
+def _art_row_to_tuple(ex: dict) -> tuple:
+    def _i(k, d=0):
+        v = ex.get(k)
+        if v is None or v == "":
+            return d
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return d
+
+    return (
+        ex.get("slot") or "fiore",
+        ex.get("set_nome") or "",
+        ex.get("nome") or "",
+        _i("livello", 0),
+        _i("stelle", 5),
+        ex.get("main_stat") or "",
+        ex.get("main_val"),
+        ex.get("sub1_stat") or "",
+        ex.get("sub1_val"),
+        ex.get("sub2_stat") or "",
+        ex.get("sub2_val"),
+        ex.get("sub3_stat") or "",
+        ex.get("sub3_val"),
+        ex.get("sub4_stat") or "",
+        ex.get("sub4_val"),
+    )
+
+
+def _overlay_hoyo_row_on_stored(stored: tuple, hoyo: tuple) -> tuple:
+    """Conserva stat da DB se HoYo non porta valori; aggiorna set/nome/livello/stelle se arrivano da HoYo."""
+    S = list(stored)
+    H = list(hoyo)
+    if len(S) < 15 or len(H) < 15:
+        return tuple(H)
+    for i in (1, 2):
+        if H[i] and str(H[i]).strip():
+            S[i] = H[i]
+    for i in (3, 4):
+        # livello/stelle: non sovrascriviamo con 0 (HoYo può non fornire info).
+        if H[i] is not None and str(H[i]).strip() != "":
+            try:
+                v = int(H[i])
+                if v > 0:
+                    S[i] = H[i]
+            except (TypeError, ValueError):
+                pass
+    if (H[5] and str(H[5]).strip()) or (H[6] not in (None, "")):
+        S[5], S[6] = H[5], H[6]
+    for j in range(4):
+        si = 7 + j * 2
+        if (H[si] and str(H[si]).strip()) or (H[si + 1] not in (None, "")):
+            S[si], S[si + 1] = H[si], H[si + 1]
+    return tuple(S)
+
+
+_HOYO_POS_TO_SLOT = {
+    1: "fiore",
+    2: "piuma",
+    3: "sabbie",
+    4: "calice",
+    5: "corona",
+}
+
+
+def _hoyo_relic_slot_from_dict(rel: dict) -> Optional[str]:
+    p = rel.get("pos")
+    try:
+        pi = int(p)
+    except (TypeError, ValueError):
+        pi = None
+    if pi in _HOYO_POS_TO_SLOT:
+        return _HOYO_POS_TO_SLOT[pi]
+    pn = str(rel.get("pos_name") or "").lower()
+    if "fiore" in pn:
+        return "fiore"
+    if "piuma" in pn:
+        return "piuma"
+    if "sabbie" in pn or "sabbia" in pn:
+        return "sabbie"
+    if "calice" in pn:
+        return "calice"
+    if "corona" in pn:
+        return "corona"
+    return None
+
+
+def _parse_hoyo_main_property(mp: Any) -> Tuple[str, Optional[float]]:
+    if mp is None:
+        return "", None
+    if isinstance(mp, dict):
+        name = str(mp.get("name") or mp.get("property_name") or "").strip()
+        val = mp.get("final") if mp.get("final") is not None else mp.get("value")
+        cv = parse_number(val)
+        return name, cv
+    return str(mp).strip(), None
+
+
+def _parse_hoyo_sub_list(subs: Any) -> List[Tuple[str, Optional[float]]]:
+    out: List[Tuple[str, Optional[float]]] = []
+    if not isinstance(subs, list):
+        return out
+    for s in subs[:4]:
+        if not isinstance(s, dict):
+            continue
+        name = str(s.get("name") or s.get("property_name") or "").strip()
+        val = s.get("final") if s.get("final") is not None else s.get("value")
+        out.append((name, parse_number(val)))
+    return out
+
+
+def _hoyo_relic_row_and_slot(rel: dict) -> Tuple[Optional[tuple], Optional[str]]:
+    slot = _hoyo_relic_slot_from_dict(rel)
+    if not slot:
+        return None, None
+    set_nome = ""
+    st = rel.get("set")
+    if isinstance(st, dict):
+        set_nome = str(st.get("name") or "").strip()
+    nome = str(rel.get("name") or "").strip()
+    try:
+        livello = int(rel.get("level") or 0)
+    except (TypeError, ValueError):
+        livello = 0
+    try:
+        stelle = int(rel.get("rarity") or 5)
+    except (TypeError, ValueError):
+        stelle = 5
+    stelle = min(5, max(1, stelle))
+    main_stat, main_val = _parse_hoyo_main_property(rel.get("main_property"))
+    subs = _parse_hoyo_sub_list(rel.get("sub_property_list"))
+    while len(subs) < 4:
+        subs.append(("", None))
+    row = (
+        slot,
+        set_nome,
+        nome,
+        livello,
+        stelle,
+        main_stat or "",
+        main_val,
+        subs[0][0] or "",
+        subs[0][1],
+        subs[1][0] or "",
+        subs[1][1],
+        subs[2][0] or "",
+        subs[2][1],
+        subs[3][0] or "",
+        subs[3][1],
+    )
+    return row, slot

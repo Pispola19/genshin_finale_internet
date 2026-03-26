@@ -22,6 +22,15 @@ from config import TIPI_ARMA
 
 JsonValue = Union[dict, list, str, int, float, bool, None]
 
+# Tipi arma numerici (API HoYoLab / game record).
+_HOYO_WEAPON_TYPE_INT: Dict[int, str] = {
+    1: "Spada",
+    10: "Catalizzatore",
+    11: "Claymore",
+    12: "Arco",
+    13: "Lancia",
+}
+
 # --- Formato canonico consigliato (estendibile, es. API future) ---
 # {
 #   "version": 1,
@@ -327,7 +336,7 @@ def _blob_to_internal_character(blob: dict) -> dict:
         or blob.get("avatarName")
         or ""
     )
-    nome = str(nome).strip()
+    nome = _sanitize_hoyolab_character_name(str(nome).strip())
     livello = blob.get("livello") if blob.get("livello") is not None else blob.get("level") or blob.get("expLevel") or 1
     try:
         livello = int(livello)
@@ -364,6 +373,14 @@ def _blob_to_internal_character(blob: dict) -> dict:
     }
 
 
+def _weapon_tipo_from_hoyo_int(code: Any) -> Optional[str]:
+    try:
+        i = int(code)
+    except (TypeError, ValueError):
+        return None
+    return _HOYO_WEAPON_TYPE_INT.get(i)
+
+
 def _normalize_weapon_tipo(raw: Any) -> str:
     s = str(raw or "Spada").strip()
     if s in TIPI_ARMA:
@@ -385,6 +402,24 @@ def _normalize_weapon_tipo(raw: Any) -> str:
     return "Spada"
 
 
+def _sanitize_hoyolab_character_name(raw: Any) -> str:
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    if "#Viaggiat" in s or "{M#" in s or "{F#" in s:
+        return "Traveler"
+    return s
+
+
+def _costellazioni_form_from_actived(n: Any) -> Dict[str, str]:
+    try:
+        n = int(n)
+    except (TypeError, ValueError):
+        n = 0
+    n = max(0, min(6, n))
+    return {f"c{i}": ("1" if i <= n else "0") for i in range(1, 7)}
+
+
 def _extract_weapon(blob: dict) -> Optional[dict]:
     w = (
         blob.get("weapon")
@@ -398,9 +433,14 @@ def _extract_weapon(blob: dict) -> Optional[dict]:
     nome = str(w.get("nome") or w.get("name") or "").strip()
     if not nome:
         return None
-    tipo = _normalize_weapon_tipo(w.get("tipo") or w.get("typeName") or w.get("weaponType") or "Spada")
+    tipo_raw = w.get("tipo") or w.get("typeName") or w.get("weaponType") or w.get("weapon_type") or w.get("type")
+    from_int = _weapon_tipo_from_hoyo_int(tipo_raw)
+    if from_int:
+        tipo = from_int
+    else:
+        tipo = _normalize_weapon_tipo(tipo_raw or "Spada")
     liv = w.get("livello") or w.get("level") or 1
-    stelle = w.get("stelle") or w.get("rankLevel") or w.get("maxLevel") or 5
+    stelle = w.get("stelle") or w.get("rankLevel") or w.get("maxLevel") or w.get("rarity") or 5
     try:
         liv = int(liv)
     except (TypeError, ValueError):
@@ -594,6 +634,31 @@ def _decode_pasted_structures(text: str) -> Tuple[Any, List[str]]:
     raise json.JSONDecodeError("no candidate", text[:50], 0)
 
 
+def _single_parsed_from_avatar_dict(av: dict) -> dict:
+    """Un avatar dall’array ``data.avatars`` (HoYoLab) → struttura ``parsed`` singola."""
+    blob = dict(av)
+    char = _blob_to_internal_character(blob)
+    if not char.get("nome"):
+        raise ValueError("missing_avatar_name")
+    weapon = _extract_weapon(blob)
+    from core.hoyolab_import import weapon_min_present_in_avatar
+    if not weapon_min_present_in_avatar(av):
+        raise ValueError("missing_weapon_min")
+    rel = av.get("relics")
+    relics_raw: List[dict] = [x for x in rel] if isinstance(rel, list) else []
+    relics_raw = [x for x in relics_raw if isinstance(x, dict)]
+    return {
+        "version": 1,
+        "source": "hoyolab",
+        "bulk": False,
+        "character": char,
+        "weapon": weapon,
+        "costellazioni_form": _costellazioni_form_from_actived(av.get("actived_constellation_num")),
+        "relics_raw": relics_raw,
+        "raw_candidates": None,
+    }
+
+
 def parse_pasted_payload(raw: str) -> dict:
     """
     Parsa il testo incollato: JSON oggetto o array; tollera rumore attorno al JSON.
@@ -615,6 +680,67 @@ def parse_pasted_payload(raw: str) -> dict:
         ) from e
 
     data = _unwrap_string_json_root(data)
+
+    if isinstance(data, dict):
+        if data.get("retcode") is not None and data.get("retcode") != 0:
+            raise ImportParseError(
+                f"Risposta API non OK (retcode={data.get('retcode')}). "
+                "Copia la risposta JSON completa quando retcode è 0."
+            )
+        inner = data.get("data")
+        if isinstance(inner, dict):
+            avatars = inner.get("avatars")
+            if (
+                isinstance(avatars, list)
+                and len(avatars) > 0
+                and all(isinstance(a, dict) for a in avatars)
+            ):
+                from core.hoyolab_import import validate_hoyolab_bulk_envelope
+
+                validate_hoyolab_bulk_envelope(data)
+                imports: List[dict] = []
+                parse_skips: List[dict] = []
+                for i, av in enumerate(avatars):
+                    try:
+                        imports.append(_single_parsed_from_avatar_dict(av))
+                    except ValueError as e:
+                        # Non blocchiamo tutto il bulk: scartiamo solo l'avatar problematico.
+                        # (il parser è resiliente a JSON parziali)
+                        try:
+                            nm = _sanitize_hoyolab_character_name(
+                                av.get("name") or av.get("nome") or av.get("nickname") or av.get("avatarName") or ""
+                            )
+                        except Exception:
+                            nm = ""
+                        parse_skips.append(
+                            {
+                                "index": i,
+                                "nome": nm or None,
+                                "reason": str(e) or "unknown_skip",
+                            }
+                        )
+                        continue
+                if not imports:
+                    raise ImportParseError(
+                        "Nessun personaggio importabile in data.avatars (tutti scartati)."
+                    )
+                from core.hoyolab_import import enrich_import_item_flags
+
+                for imp in imports:
+                    enrich_import_item_flags(imp)
+                first = imports[0]
+                return {
+                    "version": 1,
+                    "source": "hoyolab",
+                    "bulk": True,
+                    "character": first["character"],
+                    "weapon": first["weapon"],
+                    "costellazioni_form": first.get("costellazioni_form"),
+                    "relics_raw": first.get("relics_raw") or [],
+                    "raw_candidates": None,
+                    "imports": imports,
+                    "parse_skips": parse_skips,
+                }
 
     if isinstance(data, list):
         dicts = [x for x in data if isinstance(x, dict)]
@@ -645,7 +771,22 @@ def parse_pasted_payload(raw: str) -> dict:
         "character": char,
         "weapon": weapon,
         "raw_candidates": None,
+        "relics_raw": [],
+        "costellazioni_form": None,
+        "bulk": False,
+        "parse_skips": [],
     }
+    if isinstance(blob, dict):
+        rel = blob.get("relics")
+        if isinstance(rel, list):
+            out["relics_raw"] = [x for x in rel if isinstance(x, dict)]
+        if blob.get("actived_constellation_num") is not None:
+            out["costellazioni_form"] = _costellazioni_form_from_actived(
+                blob.get("actived_constellation_num")
+            )
+    from core.hoyolab_import import enrich_import_item_flags
+
+    enrich_import_item_flags(out)
     if isinstance(data, dict):
         cand: List[dict] = []
         _collect_avatar_like_dicts(data, cand)
@@ -706,6 +847,11 @@ def build_forms_for_salva_completo(parsed: dict) -> Tuple[dict, dict, dict, dict
     }
 
     fc = {f"c{i}": "0" for i in range(1, 7)}
+    ov = parsed.get("costellazioni_form")
+    if isinstance(ov, dict):
+        for k in fc:
+            if k in ov and str(ov[k]) in ("0", "1"):
+                fc[k] = str(ov[k])
     ft = {k: "-" for k in ("aa", "skill", "burst", "pas1", "pas2", "pas3", "pas4")}
     return fp, fa, fc, ft
 
@@ -715,19 +861,79 @@ def apply_manual_import(
     parsed: dict,
     selected_id: Optional[int],
     *,
-    touch_equipment: bool = False,
+    touch_equipment: Optional[bool] = None,
+    import_mode: str = "replace",
 ) -> int:
     """
-    Salva tramite AppService.salva_completo. ``touch_equipment=False`` lascia manufatti invariati (come API web).
+    Salva tramite ``salva_completo`` e applica manufatti secondo ``import_mode``:
+    replace (default), update (merge per slot), append (solo inventario).
+
+    ``touch_equipment=None`` → applica manufatti solo se ``relics_raw`` non è vuoto.
     """
+    from core.hoyolab_import import (
+        IMPORT_MODE_APPEND_DEDUP,
+        IMPORT_MODE_APPEND_FORCE,
+        normalize_import_mode,
+    )
+
+    if touch_equipment is None:
+        touch_equipment = bool(parsed.get("relics_raw"))
     fp, fa, fc, ft = build_forms_for_salva_completo(parsed)
-    feq = None if not touch_equipment else {s: None for s in ("fiore", "piuma", "sabbie", "calice", "corona")}
-    return service.salva_completo(selected_id, fp, fa, fc, ft, feq)
+    new_id = service.salva_completo(selected_id, fp, fa, fc, ft, None)
+    if touch_equipment and parsed.get("relics_raw"):
+        mode = normalize_import_mode(import_mode)
+        pid = None if mode in (IMPORT_MODE_APPEND_DEDUP, IMPORT_MODE_APPEND_FORCE) else new_id
+        service.apply_hoyo_relic_import(pid, parsed["relics_raw"], mode)
+    return new_id
 
 
 def preview_summary(parsed: dict) -> str:
+    from core.hoyolab_import import compute_hoyo_preview_stats
+
+    stats = compute_hoyo_preview_stats(parsed)
+    head = (
+        f"Quantità: {stats['n_characters']} personaggi · {stats['n_weapons']} armi · "
+        f"{stats['n_relics']} manufatti ({stats['n_relics_incomplete']} senza main+sub completi da HoYo).\n"
+    )
+    psk = parsed.get("parse_skips") or []
+    if psk:
+        head += f"Scartati in lettura JSON: {len(psk)} righe in data.avatars.\n"
+    head += "\n"
+    if parsed.get("bulk"):
+        imps = parsed.get("imports") or []
+        n = len(imps)
+        incompleti = [((imp.get("character") or {}).get("nome") or "?") for imp in imps if (imp.get("n_relics_incomplete") or 0) > 0]
+        lines = [
+            head,
+            f"Importazione gruppo HoYoLab: {n} personaggi.",
+            "Modalità manufatti: scegli replace / update / append nel modulo prima di confermare.",
+            "Elenco:",
+        ]
+        for imp in imps[:15]:
+            c = (imp.get("character") or {})
+            nm = c.get("nome") or "?"
+            lv = c.get("livello", "?")
+            el = c.get("elemento") or "?"
+            nrel = len(imp.get("relics_raw") or [])
+            nin = imp.get("n_relics_incomplete") or 0
+            lines.append(f"  • {nm} — Lv.{lv} {el} — {nrel} manufatti ({nin} incompleti)")
+        if incompleti:
+            lines.append("Incompleti: " + ", ".join(incompleti[:10]) + (" ..." if len(incompleti) > 10 else ""))
+        if n > 15:
+            lines.append(f"  … altri {n - 15} personaggi.")
+        if parsed.get("parse_skips"):
+            skip_names = []
+            for s in parsed.get("parse_skips") or []:
+                nm = s.get("nome") or ""
+                rs = s.get("reason") or ""
+                if nm:
+                    skip_names.append(f"{nm}({rs})")
+            if skip_names:
+                lines.append("Scartati (lettura): " + ", ".join(skip_names[:8]) + (" ..." if len(skip_names) > 8 else ""))
+        return "\n".join(lines)
     c = parsed["character"]
     lines = [
+        head,
         f"Nome: {c.get('nome')}",
         f"Livello: {c.get('livello')} | Elemento: {c.get('elemento')}",
         f"HP: {c.get('hp_flat')} | ATK: {c.get('atk_flat')} | DEF: {c.get('def_flat')}",
@@ -738,11 +944,16 @@ def preview_summary(parsed: dict) -> str:
         lines.append(f"Arma: {w.get('nome')} ({w.get('tipo')}) Lv.{w.get('livello')} ★{w.get('stelle')}")
     else:
         lines.append("Arma: (non trovata nei dati copiati — resterà vuota o da compilare)")
+    nr = len(parsed.get("relics_raw") or [])
+    if nr:
+        lines.append(f"Manufatti nell’incolla: {nr} pezzi (verranno importati negli slot)")
     return "\n".join(lines)
 
 
 def list_character_choices(parsed: dict) -> List[dict]:
     """Lista nomi per selezione se ``parse_pasted_payload`` ha trovato più personaggi."""
+    if parsed.get("bulk"):
+        return [i["character"] for i in (parsed.get("imports") or []) if i.get("character")]
     cand = parsed.get("raw_candidates")
     if cand:
         return cand

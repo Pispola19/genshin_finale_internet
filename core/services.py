@@ -3,6 +3,8 @@ Servizi applicativi - interfaccia unica tra GUI e database.
 La GUI parla SOLO con AppService. Nessun accesso diretto a Repository o DB.
 AppService delega a PersonaggioService, ArtefattoService, BuildService, TeamService.
 """
+from typing import Optional
+
 from core.personaggio_service import PersonaggioService
 from core.artefatto_service import ArtefattoService
 from core.build_service import BuildService
@@ -29,6 +31,37 @@ class AppService:
     # --- Personaggio (delega a PersonaggioService) ---
     def valida_nome(self, nome: str, escludi_id=None):
         return self._personaggio.valida_nome(nome, escludi_id)
+
+    def id_per_nome(self, nome: str):
+        return self._personaggio.id_per_nome(nome)
+
+    def replace_equipment_from_hoyo_relics(self, personaggio_id: int, relics: list):
+        self._personaggio.replace_equipment_from_hoyo_relics(personaggio_id, relics)
+
+    def apply_hoyo_relic_import(
+        self, personaggio_id: Optional[int], relics: list, import_mode: str
+    ) -> None:
+        """Modalità: replace | update | append_dedup | append_force."""
+        from core.hoyolab_import import (
+            IMPORT_MODE_APPEND_DEDUP,
+            IMPORT_MODE_APPEND_FORCE,
+            IMPORT_MODE_UPDATE,
+            normalize_import_mode,
+        )
+
+        m = normalize_import_mode(import_mode)
+        if m == IMPORT_MODE_APPEND_DEDUP:
+            self._personaggio.append_hoyo_relics_to_warehouse(relics, dedup=True)
+            return
+        if m == IMPORT_MODE_APPEND_FORCE:
+            self._personaggio.append_hoyo_relics_to_warehouse(relics, dedup=False)
+            return
+        if personaggio_id is None:
+            raise ValueError("Import manufatti: serve personaggio_id per modalità replace/update.")
+        if m == IMPORT_MODE_UPDATE:
+            self._personaggio.update_equipment_from_hoyo_relics(personaggio_id, relics)
+        else:
+            self._personaggio.replace_equipment_from_hoyo_relics(personaggio_id, relics)
 
     def carica_dati_completi(self, id_pg: int):
         return self._personaggio.carica_dati_completi(id_pg)

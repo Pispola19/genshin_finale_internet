@@ -17,6 +17,8 @@ from gui.form_checkpoint import (
     save_gui_checkpoint_safe,
 )
 from gui.safe_ops import gui_safe_call, notify_unexpected
+from core.import_log import append_import_log
+from core.hoyolab_import import compute_hoyo_preview_stats, normalize_import_mode
 from core.manual_import import (
     ImportParseError,
     apply_manual_import,
@@ -336,6 +338,19 @@ class GenshinApp:
         )
         hint.config(state="disabled")
 
+        mode_fr = tk.LabelFrame(win, text="Manufatti da JSON HoYoLab", padx=8, pady=6)
+        # Default più sicura: update (preserva le stat DB se HoYo non le invia).
+        import_mode_var = tk.StringVar(value="update")
+        for val, cap in (
+            ("replace", "Sostituisci equip (rimuovi pezzi attuali sul personaggio)"),
+            ("update", "Unisci per slot (conserva stat se HoYo non le invia)"),
+            ("append_dedup", "Solo magazzino — dedup (evita duplicati identici)"),
+            ("append_force", "Solo magazzino — force (duplica anche se identici)"),
+        ):
+            tk.Radiobutton(
+                mode_fr, text=cap, variable=import_mode_var, value=val, anchor="w", justify="left"
+            ).pack(fill="x")
+        mode_fr.pack(fill="x", padx=10, pady=(0, 6))
         outer = tk.Frame(win)
         outer.pack(fill="both", expand=True, padx=10, pady=6)
         txt = tk.Text(outer, height=14, font=("Menlo", 10) if sys.platform == "darwin" else ("Consolas", 10))
@@ -362,6 +377,10 @@ class GenshinApp:
             try:
                 p = parse_pasted_payload(txt.get("1.0", "end"))
                 parsed_holder["p"] = p
+                if p.get("bulk"):
+                    choice_fr.pack_forget()
+                    preview_lbl.config(text=preview_summary(p))
+                    return
                 chs = list_character_choices(p)
                 if len(chs) > 1:
                     names = [c["nome"] for c in chs]
@@ -404,6 +423,83 @@ class GenshinApp:
             try:
                 if parsed_holder["p"] is None:
                     refresh_preview()
+                p = parsed_holder["p"]
+                if not p:
+                    messagebox.showwarning(
+                        "Importa personaggio",
+                        "Non riesco a leggere nulla di valido. Incolla i dati nell’area grande, poi premi «Controlla dati».",
+                        parent=win,
+                    )
+                    return
+                if p.get("bulk"):
+                    if not as_new:
+                        messagebox.showinfo(
+                            "Importa personaggio",
+                            "Per aggiornare una scheda singola usa i dati di un solo personaggio, oppure importa tutto come nuovo.",
+                            parent=win,
+                        )
+                        return
+                    imports = p.get("imports") or []
+                    err_lines = []
+                    err_detail = []
+                    last_id = None
+                    ok_n = 0
+                    imported_names: list = []
+                    imode = normalize_import_mode(import_mode_var.get())
+                    for imp in imports:
+                        nome_i = (imp.get("character") or {}).get("nome") or ""
+                        if not nome_i:
+                            continue
+                        merge_id = self.service.id_per_nome(nome_i)
+                        ok, msg = self.service.valida_nome(nome_i, merge_id)
+                        if not ok:
+                            err_lines.append(f"{nome_i}: {msg}")
+                            err_detail.append({"nome": nome_i, "error": msg})
+                            continue
+                        try:
+                            last_id = apply_manual_import(
+                                self.service, imp, merge_id, touch_equipment=None, import_mode=imode
+                            )
+                            ok_n += 1
+                            imported_names.append(nome_i)
+                        except Exception as ie:
+                            err_lines.append(f"{nome_i}: {ie}")
+                            err_detail.append({"nome": nome_i, "error": str(ie)})
+                            continue
+                    if ok_n == 0:
+                        messagebox.showerror(
+                            "Importa personaggio",
+                            "Nessun personaggio importato.\n" + "\n".join(err_lines[:8]),
+                            parent=win,
+                        )
+                        return
+                    self.selected_id = last_id
+                    if last_id:
+                        dati = self.service.carica_dati_completi(last_id)
+                        if dati:
+                            self._populate_form(dati)
+                    save_gui_checkpoint_safe(self)
+                    win.destroy()
+                    append_import_log(
+                        {
+                            "source": "gui",
+                            "bulk": True,
+                            "import_mode": imode,
+                            "imported_ok": ok_n,
+                            "imported_names": imported_names,
+                            "errors": err_detail,
+                            "parse_skips": p.get("parse_skips") or [],
+                            "stats": compute_hoyo_preview_stats(p),
+                        }
+                    )
+                    tail = ("\n\nErrori:\n" + "\n".join(err_lines[:6])) if err_lines else ""
+                    messagebox.showinfo(
+                        "Importa personaggio",
+                        f"Importati {ok_n} personaggi (modalità manufatti: {imode}).{tail}",
+                        parent=win,
+                    )
+                    return
+
                 p = _effective_parsed()
                 if not p:
                     messagebox.showwarning(
@@ -420,18 +516,39 @@ class GenshinApp:
                         parent=win,
                     )
                     return
-                ok, msg = self.service.valida_nome(p["character"]["nome"], sid if sid else None)
+                nome_sel = p["character"]["nome"]
+                merge_id = sid if sid is not None else self.service.id_per_nome(nome_sel)
+                ok, msg = self.service.valida_nome(nome_sel, merge_id)
                 if not ok:
                     messagebox.showinfo("Attenzione", msg, parent=win)
                     return
-                new_id = apply_manual_import(self.service, p, sid, touch_equipment=False)
+                imode = normalize_import_mode(import_mode_var.get())
+                new_id = apply_manual_import(
+                    self.service, p, merge_id, touch_equipment=None, import_mode=imode
+                )
                 self.selected_id = new_id
                 dati = self.service.carica_dati_completi(new_id)
                 if dati:
                     self._populate_form(dati)
+                append_import_log(
+                    {
+                        "source": "gui",
+                        "bulk": False,
+                        "import_mode": imode,
+                        "imported_ok": 1,
+                        "errors": [],
+                        "parse_skips": p.get("parse_skips") or [],
+                        "stats": compute_hoyo_preview_stats(p),
+                        "personaggio": (p.get("character") or {}).get("nome"),
+                        "imported_names": [(p.get("character") or {}).get("nome")],
+                    }
+                )
                 save_gui_checkpoint_safe(self)
                 win.destroy()
-                messagebox.showinfo("Importa personaggio", "Fatto! La scheda è stata salvata e aggiornata in questo programma.")
+                messagebox.showinfo(
+                    "Importa personaggio",
+                    f"Fatto! Scheda aggiornata (manufatti: {imode}).",
+                )
             except ImportParseError:
                 logger.exception("import manual ImportParseError")
                 notify_unexpected(win)
