@@ -30,14 +30,31 @@ def _ensure_schema_once() -> None:
         _schema_initialized = True
 
 
+def _configure_live_connection(conn: sqlite3.Connection) -> None:
+    """Timeout e pragmas per meno «database is locked»; check_same_thread su connect."""
+    try:
+        conn.execute("PRAGMA foreign_keys = ON")
+    except sqlite3.Error:
+        pass
+    try:
+        conn.execute("PRAGMA busy_timeout = 10000")
+    except sqlite3.Error:
+        pass
+
+
 def get_connection():
     """Connessione al database principale per il thread corrente (Flask / gunicorn multi-thread)."""
     _ensure_schema_once()
     main: Optional[sqlite3.Connection] = getattr(_tls, "main", None)
     if main is None:
-        main = sqlite3.connect(DB_PATH)
+        # check_same_thread=False: Tkinter/timer e worker diversi possono riusare lo stesso
+        # AppService senza ProgrammingError; SQLite serializza comunque le scritture.
+        main = sqlite3.connect(DB_PATH, timeout=20.0, check_same_thread=False)
+        _configure_live_connection(main)
         _tls.main = main
-        _tls.art = sqlite3.connect(ARTEFATTI_DB_PATH)
+        art = sqlite3.connect(ARTEFATTI_DB_PATH, timeout=20.0, check_same_thread=False)
+        _configure_live_connection(art)
+        _tls.art = art
     return main
 
 

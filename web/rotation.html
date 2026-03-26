@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="api-base" content="/api">
+  <title>Stima rotazione — Genshin Manager</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page-bg page-bg-build">
+  <nav class="app-nav" aria-label="Navigazione principale">
+    <div class="nav-pages">
+      <a href="personaggio.html">Personaggio</a>
+      <a href="artefatti.html">Manufatti</a>
+      <a href="build.html">Build Analysis</a>
+      <a href="rotation.html" class="active">Rotazione</a>
+      <a href="team.html">Team Builder</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="personaggio.html#import" class="nav-import">Import</a>
+      <a href="istruzioni.html">Come si usa</a>
+      <a href="login.html" class="nav-login">Accedi</a>
+      <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
+    </div>
+  </nav>
+
+  <aside class="app-notice app-notice-dps" role="note">
+    <span class="app-notice-text"><strong>Stima rotazione</strong> moltiplica il <strong>proxy danno</strong> della build salvata per un fattore da talenti AA/E/Q e pesi NA–skill–burst. È un <strong>indice relativo</strong>, non il DPS in gioco.</span>
+    <a class="app-notice-link" href="build.html">Build Analysis</a>
+  </aside>
+
+  <main>
+    <div class="section section-autocomplete">
+      <h2>Indice rotazione (personaggio salvato)</h2>
+      <p class="page-hint">Servono personaggio <strong>salvato</strong> nel database con foglio, arma e (per il proxy) manufatti equipaggiati come in <a href="build.html">Build Analysis</a>.</p>
+      <div class="form-row">
+        <label for="rotPgSelect">Personaggio</label>
+        <select id="rotPgSelect"></select>
+      </div>
+      <div class="form-row">
+        <label for="rotPreset">Preset rotazione</label>
+        <select id="rotPreset">
+          <option value="equilibrato">Equilibrato (NA / E / Q)</option>
+          <option value="na_focus">Più attacchi normali</option>
+          <option value="burst_focus">Più tripudio (Q)</option>
+        </select>
+      </div>
+      <p class="page-hint" id="rotationErr" hidden style="color:#b45309;font-weight:600"></p>
+      <button type="button" class="btn-primary" id="rotCalcBtn">Calcola</button>
+    </div>
+
+    <div class="section" id="rotationResult" hidden>
+      <h3>Risultato</h3>
+      <p id="rotationSummary" class="page-hint" style="font-size:1.05rem"></p>
+      <pre id="rotationDetail" class="rotation-pre"></pre>
+    </div>
+  </main>
+
+  <script src="js/rotation.js"></script>
+</body>
+</html>

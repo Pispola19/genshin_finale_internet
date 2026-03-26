@@ -70,6 +70,9 @@ class AppService:
     def formato_messaggio_dps(self, artefatto_id: int, max_righe: int = 5):
         return self._artefatto.formato_messaggio_dps(artefatto_id, max_righe)
 
+    def dps_result_artefatto(self, artefatto_id: int):
+        return self._artefatto.dps_result_artefatto(artefatto_id)
+
     def aggiungi_artefatto(self, form_values: dict):
         return self._artefatto.aggiungi_artefatto(form_values)
 
@@ -113,6 +116,28 @@ class AppService:
     # --- Build (delega a BuildService) ---
     def get_build_analysis(self, personaggio_id: int):
         return self._build.analisi_build(personaggio_id)
+
+    def get_rotation_stima(self, personaggio_id: int, preset: str = "equilibrato"):
+        """Stima indice rotazione (v0.1) per PG salvato: proxy build × fattore talenti/pesi."""
+        from config import SLOT_DB
+        from core.dps_types import build_full_combat_view
+        from core.rotation_dps import compute_rotation_estimate
+
+        pg = self._personaggio.get_personaggio(personaggio_id)
+        if not pg:
+            return {"ok": False, "message_it": "Personaggio non trovato."}
+        arma = self._personaggio.get_arma(personaggio_id)
+        eq = self._personaggio.get_equipaggiamento_ids(personaggio_id)
+        seq = []
+        for slot in SLOT_DB:
+            aid = eq.get(slot)
+            seq.append(self._artefatto.get_artefatto(aid) if aid else None)
+        full = build_full_combat_view(pg, arma, seq)
+        tal = self._personaggio.get_talenti(personaggio_id)
+        nome = (getattr(pg, "nome", None) or "") or ""
+        return compute_rotation_estimate(
+            full, tal.aa, tal.skill, tal.burst, preset=preset, personaggio_nome=nome
+        )
 
     # --- Team (delega a TeamService) ---
     def calcola_top_teams(self, personaggi_ids: list):

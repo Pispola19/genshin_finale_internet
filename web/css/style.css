@@ -155,8 +155,30 @@ nav.app-nav .nav-pages a.active {
   box-shadow: none;
 }
 
-nav.app-nav .nav-pages a.nav-hoyolab {
+nav.app-nav .nav-pages a.nav-login {
   margin-left: auto;
+  flex-shrink: 0;
+  padding: 0.45rem 0.75rem;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+nav.app-nav .nav-pages a.nav-login:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+nav.app-nav .nav-pages a.nav-login.active {
+  background: rgba(255, 255, 255, 0.28);
+  font-weight: 700;
+}
+
+nav.app-nav .nav-pages a.nav-hoyolab {
+  margin-left: 0;
   flex-shrink: 0;
   padding: 0.45rem 0.75rem 0.45rem 1rem;
   border-left: 1px solid rgba(255, 255, 255, 0.28);
@@ -172,6 +194,103 @@ nav.app-nav .nav-pages a.nav-hoyolab {
 nav.app-nav .nav-pages a.nav-hoyolab:hover {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.1);
+}
+
+nav.app-nav .nav-pages a.nav-import {
+  color: rgba(255, 248, 220, 0.95);
+  font-weight: 600;
+}
+
+nav.app-nav .nav-pages a.nav-import:hover {
+  color: #fff8e0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Modale import / lista modifica (personaggio web) */
+.modal-panel.modal-panel-import {
+  max-width: 38rem;
+  max-height: 92vh;
+  background: rgba(255, 252, 255, 0.98);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.modal-panel-import h2 {
+  font-size: 1.2rem;
+  margin: 0 1.75rem 0 0;
+  color: var(--text);
+}
+
+.import-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin: 0.5rem 0 0.35rem;
+  color: var(--text-muted);
+}
+
+.import-textarea {
+  width: 100%;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  padding: 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  resize: vertical;
+  min-height: 10rem;
+}
+
+.import-preview {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(240, 242, 255, 0.9);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 12rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+}
+
+.import-modal-actions {
+  margin-top: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.import-choice-wrap {
+  margin-top: 0.65rem;
+}
+
+.import-choice-wrap select {
+  width: 100%;
+  padding: 0.4rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.lista-pg-modifica {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.lista-pg-modifica .pick-pg {
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  margin-bottom: 0.4rem;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.lista-pg-modifica .pick-pg:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
 
 /* Container principale */
@@ -1060,6 +1179,205 @@ th {
   margin-bottom: 0.75rem;
 }
 
+.build-pre-dps {
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid rgba(220, 218, 235, 0.45);
+}
+
+.build-subh {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin: 0.5rem 0 0.35rem;
+}
+
+.build-subh:first-child {
+  margin-top: 0;
+}
+
+.build-slot-list,
+.build-bonus-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.build-slot-list li,
+.build-bonus-list li {
+  padding: 0.2rem 0;
+  border-bottom: 1px solid rgba(220, 218, 235, 0.25);
+}
+
+.build-slot-list li:last-child,
+.build-bonus-list li:last-child {
+  border-bottom: none;
+}
+
+.build-slot-list .slot-tag {
+  display: inline-block;
+  min-width: 4.2rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.build-slot-list li.slot-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.build-slot-list li.slot-changed {
+  background: rgba(251, 191, 36, 0.15);
+  border-left: 3px solid rgba(217, 119, 6, 0.85);
+  padding-left: 0.35rem;
+  margin: 0.15rem 0;
+  border-radius: 6px;
+  list-style: none;
+}
+
+.build-slot-list li.slot-unchanged {
+  opacity: 0.92;
+}
+
+.build-compare-lead {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin: 0 0 0.65rem;
+}
+
+.build-compare-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1.1rem;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.build-compare-legend > span {
+  display: inline-flex;
+  align-items: center;
+}
+
+.build-ux-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.45em;
+  height: 1.45em;
+  margin-right: 0.35rem;
+  padding: 0 0.15em;
+  font-size: 0.88em;
+  line-height: 1;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.build-ux-ico-same {
+  background: rgba(52, 169, 137, 0.2);
+  color: #1d8a6f;
+}
+
+.build-ux-ico-change {
+  background: rgba(251, 191, 36, 0.4);
+  color: #b45309;
+}
+
+.build-ux-ico-empty {
+  background: rgba(107, 106, 122, 0.14);
+  color: var(--text-muted);
+}
+
+.build-ux-ico-set {
+  background: rgba(107, 125, 232, 0.22);
+  color: var(--accent-dark);
+  margin-right: 0.45rem;
+  vertical-align: middle;
+}
+
+.build-ux-ico-setmini {
+  background: rgba(107, 125, 232, 0.15);
+  color: var(--accent-dark);
+  margin-right: 0.35rem;
+  min-width: 1.25em;
+  height: 1.25em;
+  font-size: 0.72em;
+}
+
+.build-set-impact-section {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: none !important;
+  margin-top: 0.35rem;
+}
+
+.build-slot-diff-wrap {
+  overflow-x: auto;
+}
+
+.build-slot-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.build-slot-diff-table th,
+.build-slot-diff-table td {
+  text-align: left;
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid rgba(220, 218, 235, 0.4);
+}
+
+.build-slot-diff-table tbody tr.row-changed {
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.build-slot-diff-table tbody tr.row-same {
+  opacity: 0.88;
+}
+
+.build-slot-diff-table .cell-status {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.build-slot-diff-table .status-change {
+  color: #b45309;
+}
+
+.build-slot-diff-table .status-same {
+  color: var(--text-muted);
+}
+
+.build-set-impact-summary {
+  font-size: 0.88rem;
+  margin: 0 0 0.4rem;
+  line-height: 1.4;
+}
+
+.build-set-impact-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.build-set-impact-list li {
+  padding: 0.15rem 0;
+  border-bottom: 1px solid rgba(220, 218, 235, 0.2);
+}
+
 .stat-row {
   display: flex;
   justify-content: space-between;
@@ -1071,6 +1389,18 @@ th {
 
 .stat-row .positive { color: var(--success); font-weight: 600; }
 .stat-row .negative { color: var(--danger); font-weight: 600; }
+
+.stat-row span.positive.delta-typed::before {
+  content: "▲ ";
+  font-size: 0.82em;
+  opacity: 0.88;
+}
+
+.stat-row span.negative.delta-typed::before {
+  content: "▼ ";
+  font-size: 0.82em;
+  opacity: 0.88;
+}
 
 /* Team slots */
 .team-slots {
@@ -1384,4 +1714,165 @@ td.magazzino-azioni {
 td.magazzino-azioni .btn {
   margin: 0.12rem 0 0.12rem 0.3rem;
   vertical-align: middle;
+}
+
+/* —— Inventario manufatti: pagina Archivio + Equip —— */
+main.inv-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.25rem 1.25rem 2.5rem;
+}
+
+.inv-hero-title {
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 0.15rem;
+  letter-spacing: -0.02em;
+}
+
+.inv-tablist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1rem 0 0.5rem;
+  padding: 0.35rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid var(--border);
+}
+
+.inv-tab {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0.55rem 1.15rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.inv-tab:hover {
+  color: var(--text);
+  background: rgba(107, 125, 232, 0.1);
+}
+
+.inv-tab.is-active {
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 14px rgba(107, 125, 232, 0.35);
+}
+
+.inv-section-kicker {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--accent-dark);
+  margin: 0 0 0.2rem;
+}
+
+.equip-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  margin-top: 0.75rem;
+}
+
+.equip-pg-field {
+  min-width: min(100%, 18rem);
+  flex: 1;
+}
+
+.equip-slots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.equip-slot-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.05rem 1.1rem;
+  box-shadow: 0 4px 18px rgba(35, 30, 60, 0.06);
+}
+
+.equip-slot-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+
+.equip-slot-current {
+  min-height: 3.2rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(240, 242, 255, 0.65);
+  border: 1px solid rgba(200, 198, 220, 0.45);
+  font-size: 0.86rem;
+  line-height: 1.4;
+  margin-bottom: 0.65rem;
+}
+
+.equip-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.equip-cur-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.equip-cur-set {
+  color: var(--accent-dark);
+}
+
+.equip-cur-main {
+  color: var(--text);
+}
+
+.equip-cur-id {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.equip-pick-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.equip-pick-select {
+  width: 100%;
+  margin-bottom: 0.55rem;
+}
+
+.equip-apply-btn {
+  width: 100%;
+}
+
+.rotation-pre {
+  margin-top: 0.75rem;
+  padding: 1rem 1.1rem;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  overflow: auto;
+  max-height: 420px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

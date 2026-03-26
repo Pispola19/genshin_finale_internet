@@ -7,9 +7,13 @@ from typing import List, Optional, Tuple
 from core.validation import parse_number, validate_nome
 from db.connection import close_thread_connections, get_connection, get_artefatti_connection
 from config import SLOT_DB, PERSONAGGI_GENSHIN
+from db.models import Arma
 from db.repositories import (
-    PersonaggioRepository, ArmaRepository,
-    ArtefattoRepository, CostellazioniRepository, TalentiRepository
+    PersonaggioRepository,
+    ArmaRepository,
+    ArtefattoRepository,
+    CostellazioniRepository,
+    TalentiRepository,
 )
 
 
@@ -135,9 +139,17 @@ class PersonaggioService:
         """Personaggio raw per logica build/team."""
         return PersonaggioRepository.get(self.conn, id_pg)
 
+    def get_arma(self, personaggio_id: int) -> Optional[Arma]:
+        """Arma equipaggiata al personaggio, se presente."""
+        return ArmaRepository.get(self.conn, personaggio_id)
+
     def get_equipaggiamento_ids(self, personaggio_id: int) -> dict:
         """{slot: artefatto_id} per personaggio."""
         return ArtefattoRepository.equip_map_for_personaggio(self.conn_art, personaggio_id)
+
+    def get_talenti(self, personaggio_id: int):
+        """Livelli talento AA/E/Q… come da DB (None = non compilato)."""
+        return TalentiRepository.get(self.conn, personaggio_id)
 
     def lista_personaggi_righe(self) -> List[Tuple[int, str, int, str]]:
         """Righe pronte per Treeview: [(id, nome, livello, elemento), ...]."""

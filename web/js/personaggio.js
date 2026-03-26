@@ -175,11 +175,10 @@ document.addEventListener("click", e => {
   if (!inSearch) autocompleteList.style.display = "none";
 });
 
-async function loadPersonaggio(id) {
-  const r = await fetch(`${API}/personaggio/${id}`);
-  if (!r.ok) return;
-  const d = await r.json();
-  currentId = id;
+/** Riempie il modulo scheda da oggetto come GET /api/personaggio/:id (o campo dati dopo import). */
+function applySchedaToForm(d, idPg) {
+  if (!d) return;
+  if (idPg != null) currentId = idPg;
 
   nome.value = d.nome || "";
   livello.value = d.livello === "-" ? "" : d.livello;
@@ -221,6 +220,15 @@ async function loadPersonaggio(id) {
       if (contentEl) contentEl.innerHTML = formatArtefatto(info);
     }
   }
+  syncImportUpdateBtn();
+}
+
+async function loadPersonaggio(id) {
+  const r = await fetch(`${API}/personaggio/${id}`);
+  if (!r.ok) return false;
+  const d = await r.json();
+  applySchedaToForm(d, id);
+  return true;
 }
 
 async function salva() {
@@ -294,12 +302,188 @@ async function cancella() {
   }
 }
 
-document.getElementById("btnNuovo").addEventListener("click", nuovo);
+function syncImportUpdateBtn() {
+  const btn = document.getElementById("importUpdateBtn");
+  if (btn) btn.disabled = !currentId;
+}
+
+document.getElementById("btnNuovo").addEventListener("click", () => {
+  nuovo();
+  syncImportUpdateBtn();
+});
 document.getElementById("btnSalva").addEventListener("click", salva);
 document.getElementById("btnCancella").addEventListener("click", cancella);
+
+const importBackdrop = document.getElementById("importBackdrop");
+const importRaw = document.getElementById("importRaw");
+const importPreview = document.getElementById("importPreview");
+const importChoiceWrap = document.getElementById("importChoiceWrap");
+const importChoiceNome = document.getElementById("importChoiceNome");
+const listaPgBackdrop = document.getElementById("listaPgBackdrop");
+
+function openImportModal() {
+  if (!importBackdrop) return;
+  importBackdrop.hidden = false;
+  if (importPreview) {
+    importPreview.hidden = true;
+    importPreview.textContent = "";
+  }
+  if (importChoiceWrap) importChoiceWrap.hidden = true;
+  syncImportUpdateBtn();
+}
+
+function closeImportModal() {
+  if (importBackdrop) importBackdrop.hidden = true;
+}
+
+document.getElementById("importClose")?.addEventListener("click", closeImportModal);
+importBackdrop?.addEventListener("click", (e) => {
+  if (e.target === importBackdrop) closeImportModal();
+});
+
+document.getElementById("navImportLink")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  openImportModal();
+});
+
+if (location.hash === "#import") {
+  openImportModal();
+  history.replaceState(null, "", location.pathname + location.search);
+}
+
+async function runImportPreview() {
+  if (!importRaw) return;
+  const r = await fetch(`${API}/personaggio/import-incolla`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ raw: importRaw.value, preview: true }),
+  });
+  let data = {};
+  try {
+    data = await r.json();
+  } catch {
+    /* ignore */
+  }
+  if (!r.ok || data.error) {
+    alert("Errore: " + (data.error || r.statusText || r.status));
+    return;
+  }
+  if (importPreview) {
+    importPreview.textContent = data.summary || "";
+    importPreview.hidden = false;
+  }
+  if (importChoiceWrap && importChoiceNome && Array.isArray(data.choices) && data.choices.length > 1) {
+    importChoiceWrap.hidden = false;
+    importChoiceNome.innerHTML = "";
+    data.choices.forEach((n) => {
+      const o = document.createElement("option");
+      o.value = n;
+      o.textContent = n;
+      importChoiceNome.appendChild(o);
+    });
+  } else if (importChoiceWrap) {
+    importChoiceWrap.hidden = true;
+  }
+}
+
+document.getElementById("importPreviewBtn")?.addEventListener("click", runImportPreview);
+
+async function doImport(asNew) {
+  if (!importRaw) return;
+  const payload = { raw: importRaw.value, preview: false };
+  if (importChoiceWrap && !importChoiceWrap.hidden && importChoiceNome && importChoiceNome.value) {
+    payload.character_nome = importChoiceNome.value;
+  }
+  if (!asNew) {
+    if (!currentId) {
+      alert("Nessuna scheda aperta. Usa MODIFICA per caricare un personaggio, oppure Importa come nuovo.");
+      return;
+    }
+    payload.id = currentId;
+  }
+  const r = await fetch(`${API}/personaggio/import-incolla`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  let data = {};
+  try {
+    data = await r.json();
+  } catch {
+    /* ignore */
+  }
+  if (!r.ok || data.error) {
+    alert("Errore: " + (data.error || r.statusText || r.status));
+    return;
+  }
+
+  await loadPersonaggi();
+  await loadCatalogoNomi();
+
+  if (data.dati) {
+    applySchedaToForm(data.dati, data.id);
+  } else {
+    const loaded = await loadPersonaggio(data.id);
+    if (!loaded) {
+      alert("Import salvato ma impossibile ricaricare la scheda. Ricarica la pagina.");
+      currentId = data.id;
+      syncImportUpdateBtn();
+      closeImportModal();
+      return;
+    }
+  }
+
+  searchPersonaggio.value = nome.value.trim() || searchPersonaggio.value;
+  syncImportUpdateBtn();
+  closeImportModal();
+
+  const mainEl = document.querySelector(".personaggio-main") || document.getElementById("nome");
+  if (mainEl && typeof mainEl.scrollIntoView === "function") {
+    mainEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  alert("Import completato — scheda aggiornata.\n\n" + (data.summary || ""));
+}
+
+document.getElementById("importNewBtn")?.addEventListener("click", () => doImport(true));
+document.getElementById("importUpdateBtn")?.addEventListener("click", () => doImport(false));
+
+function openListaModifica() {
+  if (!listaPgBackdrop) return;
+  if (!personaggiList.length) {
+    alert("Non ci sono personaggi salvati. Usa NUOVO o Import.");
+    return;
+  }
+  const ul = document.getElementById("listaPgUl");
+  if (!ul) return;
+  ul.innerHTML = "";
+  const sorted = [...personaggiList].sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "it"));
+  sorted.forEach((p) => {
+    const li = document.createElement("li");
+    li.className = "pick-pg";
+    li.textContent = `${p.nome} — Lv.${p.livello} (${p.elemento || "—"})`;
+    li.addEventListener("click", async () => {
+      await loadPersonaggio(p.id);
+      searchPersonaggio.value = p.nome;
+      listaPgBackdrop.hidden = true;
+      syncImportUpdateBtn();
+    });
+    ul.appendChild(li);
+  });
+  listaPgBackdrop.hidden = false;
+}
+
+document.getElementById("btnModifica")?.addEventListener("click", openListaModifica);
+document.getElementById("listaPgClose")?.addEventListener("click", () => {
+  if (listaPgBackdrop) listaPgBackdrop.hidden = true;
+});
+listaPgBackdrop?.addEventListener("click", (e) => {
+  if (e.target === listaPgBackdrop) listaPgBackdrop.hidden = true;
+});
 
 async function initPersonaggioPage() {
   initArmaStatDatalist();
   await Promise.all([loadPersonaggi(), loadCatalogoNomi()]);
+  syncImportUpdateBtn();
 }
 initPersonaggioPage();

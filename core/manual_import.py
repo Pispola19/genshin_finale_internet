@@ -4,12 +4,18 @@ Import manuale di dati personaggio da testo/JSON incollato (senza login, senza s
 Flusso pensato: l’utente copia dal browser (es. risposta JSON da DevTools) o incolla un JSON
 nel formato documentato qui, oppure un dizionario “piatto” con chiavi alias.
 
+Il parser accetta anche incolla “sporco”: testo attorno al JSON, markdown ``` fence,
+virgole finali, virgolette tipografiche, prefissi anti-XSSI, blocchi annidati
+(estrazione del valore JSON bilanciato più promettente).
+
 L’output è compatibile con ``PersonaggioService.salva_completo`` tramite
 ``build_forms_for_salva_completo`` + ``apply_manual_import``.
 """
 from __future__ import annotations
 
 import json
+import math
+import re
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from config import TIPI_ARMA
@@ -83,6 +89,8 @@ _FIGHT_PROP_TO_INTERNAL: Dict[str, Tuple[str, bool]] = {
     "7": ("em_flat", False),
     "28": ("em_flat", False),
     "2005": ("em_flat", False),
+    "39": ("em_flat", False),  # varianti client / dump4969
+    "40": ("em_flat", False),
     "20": ("cr", True),  # fraction → percent
     "2008": ("cr", True),
     "22": ("cd", True),
@@ -91,6 +99,8 @@ _FIGHT_PROP_TO_INTERNAL: Dict[str, Tuple[str, bool]] = {
     "2010": ("er", True),
     "11": ("er", True),  # ER alternativo in alcuni dump
     "2007": ("er", True),
+    "26": ("er", True),
+    "29": ("er", True),
 }
 
 
@@ -98,12 +108,54 @@ class ImportParseError(ValueError):
     """Testo non JSON valido o struttura non riconosciuta."""
 
 
-def _norm_pct(val: Any, likely_fraction: bool) -> Optional[float]:
+# Prefissi che a volte precedono il corpo JSON nelle risposte web
+_XSSI_PREFIXES = (")]}'\n", ")]}'\r\n", "while(1);", "while(1);\n")
+
+
+def _coerce_stat_number(val: Any) -> Optional[float]:
+    """Accetta int/float, stringhe con virgole (migliaia o decimale), % e spazi."""
     if val is None:
         return None
+    if isinstance(val, bool):
+        return None
+    if isinstance(val, (int, float)):
+        if isinstance(val, float) and math.isnan(val):
+            return None
+        return float(val)
+    s = str(val).strip().replace("\u00a0", " ").replace("%", "").strip()
+    if not s or s in ("-", "—", "n/a", "N/A"):
+        return None
+    s = s.replace(" ", "")
+    # decimale: 1,5 (EU) | 18,500 (migliaia) | 1.250,5 (EU) | 1,250.5 (US)
+    if "," in s and "." not in s:
+        parts = s.split(",")
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            a, b = parts[0], parts[1]
+            if len(b) <= 2:
+                s = f"{a}.{b}"
+            elif len(b) == 3 and len(a) <= 4:
+                s = a + b
+            else:
+                s = s.replace(",", "")
+        else:
+            s = s.replace(",", "")
+    elif "," in s and "." in s:
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
     try:
-        x = float(val)
-    except (TypeError, ValueError):
+        x = float(s)
+    except ValueError:
+        return None
+    if math.isnan(x) or math.isinf(x):
+        return None
+    return x
+
+
+def _norm_pct(val: Any, likely_fraction: bool) -> Optional[float]:
+    x = _coerce_stat_number(val)
+    if x is None:
         return None
     if likely_fraction and 0 < x < 2:
         x *= 100.0
@@ -124,6 +176,9 @@ def _normalize_element(raw: Any) -> str:
         return "Pyro"
     s = str(raw).strip()
     if not s:
+        return "Pyro"
+    # Solo cifre: incerto tra API diverse → default neutro
+    if s.isdigit():
         return "Pyro"
     low = s.lower()
     if low in _ELEMENT_NORMALIZE:
@@ -149,10 +204,12 @@ def _consume_fight_prop_map(props: Any) -> Dict[str, Any]:
             if n is not None:
                 out[field] = n
         else:
-            try:
-                out[field] = int(round(float(v)))
-            except (TypeError, ValueError):
-                pass
+            cn = _coerce_stat_number(v)
+            if cn is not None:
+                try:
+                    out[field] = int(round(cn))
+                except (OverflowError, ValueError):
+                    pass
     return out
 
 
@@ -164,6 +221,9 @@ def _score_avatar_candidate(d: dict) -> int:
         s += 3
     if d.get("fightPropMap") or d.get("propMap") or d.get("fight_prop_map"):
         s += 4
+    fk = _flatten_stat_keys(d)
+    if any(fk.get(k) not in (None, "") for k in ("hp_flat", "atk_flat", "def_flat", "em_flat", "cr", "cd", "er")):
+        s += 2
     return s
 
 
@@ -175,6 +235,31 @@ def _character_blob_has_name(blob: dict) -> bool:
         or blob.get("avatarName")
     )
     return bool(str(nome or "").strip())
+
+
+def _is_collectable_avatar_dict(d: dict) -> bool:
+    """
+    Include blocchi “magri” (solo nome o nome+livello) così import incompleti restano utilizzabili;
+    richiede un nome con almeno 2 caratteri per evitare rumore.
+    """
+    if _score_avatar_candidate(d) >= 4:
+        return True
+    if not _character_blob_has_name(d):
+        return False
+    nome = str(
+        d.get("nome") or d.get("name") or d.get("nickname") or d.get("avatarName") or ""
+    ).strip()
+    if len(nome) < 2:
+        return False
+    if any(
+        k in d
+        for k in ("level", "livello", "expLevel", "fightPropMap", "propMap", "fight_prop_map")
+    ):
+        return True
+    if any(_flatten_stat_keys(d).get(k) not in (None, "") for k in set(_STAT_ALIASES.values())):
+        return True
+    # Solo nome: ultima risorsa per incolla incompleto
+    return True
 
 
 def _avatar_quality(d: dict) -> int:
@@ -198,7 +283,7 @@ def _collect_avatar_like_dicts(obj: JsonValue, out: List[dict], seen: Optional[s
         return
     seen.add(oid)
     if isinstance(obj, dict):
-        if _score_avatar_candidate(obj) >= 4:
+        if _is_collectable_avatar_dict(obj):
             out.append(obj)
         for v in obj.values():
             _collect_avatar_like_dicts(v, out, seen)
@@ -249,7 +334,13 @@ def _blob_to_internal_character(blob: dict) -> dict:
     except (TypeError, ValueError):
         livello = 1
 
-    elemento = _normalize_element(blob.get("elemento") or blob.get("element") or blob.get("elemType"))
+    elemento = _normalize_element(
+        blob.get("elemento")
+        or blob.get("element")
+        or blob.get("elemType")
+        or blob.get("Element")
+        or blob.get("elementType")
+    )
 
     stats: Dict[str, Any] = {}
     stats.update(_flatten_stat_keys(blob))
@@ -295,7 +386,13 @@ def _normalize_weapon_tipo(raw: Any) -> str:
 
 
 def _extract_weapon(blob: dict) -> Optional[dict]:
-    w = blob.get("weapon") or blob.get("equip") or blob.get("Weapon")
+    w = (
+        blob.get("weapon")
+        or blob.get("equip")
+        or blob.get("Weapon")
+        or blob.get("equipWeapon")
+        or blob.get("weaponData")
+    )
     if not isinstance(w, dict):
         return None
     nome = str(w.get("nome") or w.get("name") or "").strip()
@@ -330,20 +427,194 @@ def _strip_json_text(raw: str) -> str:
     return text
 
 
+def _strip_xssi_prefix(text: str) -> str:
+    t = text.lstrip()
+    for p in _XSSI_PREFIXES:
+        if t.startswith(p):
+            return t[len(p) :].lstrip()
+    return text
+
+
+def _normalize_quotes_and_dashes(text: str) -> str:
+    """Sostituisce caratteri tipografici comuni dal copia-incolla."""
+    return (
+        text.replace("\u201c", '"')
+        .replace("\u201d", '"')
+        .replace("\u2018", "'")
+        .replace("\u2019", "'")
+        .replace("\u00ab", '"')
+        .replace("\u00bb", '"')
+    )
+
+
+_FENCE_RE = re.compile(r"```(?:json|JSON)?\s*([\s\S]*?)```", re.MULTILINE)
+
+
+def _unwrap_markdown_fences(text: str) -> str:
+    m = _FENCE_RE.search(text)
+    if m:
+        inner = m.group(1).strip()
+        if inner:
+            return inner
+    return text
+
+
+def _remove_trailing_commas(text: str) -> str:
+    """Rimuove virgole illegali prima di } o ] (incolla sporco)."""
+    out = text
+    for _ in range(64):
+        nxt = re.sub(r",(\s*[}\]])", r"\1", out)
+        if nxt == out:
+            break
+        out = nxt
+    return out
+
+
+def _extract_balanced_json_fragment(text: str, start: int) -> Optional[Tuple[str, int]]:
+    """
+    Da ``start`` su ``{`` o ``[``, restituisce (frammento, indice dopo la chiusura) o None.
+    Rispetta stringhe JSON con virgolette doppie e escape.
+    """
+    if start < 0 or start >= len(text) or text[start] not in "{[":
+        return None
+    depth = 1
+    in_string = False
+    escape = False
+    for j in range(start + 1, len(text)):
+        ch = text[j]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+            continue
+        if ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+            if depth == 0:
+                return text[start : j + 1], j + 1
+    return None
+
+
+def _iter_json_substrings(text: str) -> List[str]:
+    """Tutti gli oggetti/array top-level bilanciati (anche annidati nel testo)."""
+    found: List[str] = []
+    seen: set[str] = set()
+    i = 0
+    while i < len(text):
+        if text[i] in "{[":
+            got = _extract_balanced_json_fragment(text, i)
+            if got:
+                frag, end = got
+                if frag not in seen:
+                    seen.add(frag)
+                    found.append(frag)
+                i = end
+                continue
+        i += 1
+    # Più grandi prima: spesso contengono il payload completo
+    found.sort(key=len, reverse=True)
+    return found
+
+
+def _try_json_loads(text: str) -> Any:
+    return json.loads(text)
+
+
+def _unwrap_string_json_root(data: Any) -> Any:
+    """Se il JSON è una stringa che contiene a sua volta JSON (export annidati), espande."""
+    out: Any = data
+    for _ in range(5):
+        if not isinstance(out, str):
+            return out
+        s = out.strip()
+        if len(s) < 2 or s[0] not in "{[" or s[-1] not in "}]":
+            return out
+        try:
+            out = json.loads(s)
+        except json.JSONDecodeError:
+            return data if _ == 0 else out
+    return out
+
+
+def _decode_pasted_structures(text: str) -> Tuple[Any, List[str]]:
+    """
+    Restituisce (data_parsed, note_di_tentativo) o solleva l’ultimo JSONDecodeError.
+    Prova: testo diretto, fence, xssi, virgole finali, sottostringhe bilanciate { } / [ ].
+    """
+    attempts: List[str] = []
+    candidates: List[str] = []
+    base = _strip_json_text(text)
+    if not base:
+        raise json.JSONDecodeError("empty", "", 0)
+
+    chain = [
+        base,
+        _unwrap_markdown_fences(base),
+        _normalize_quotes_and_dashes(_unwrap_markdown_fences(base)),
+        _strip_xssi_prefix(_normalize_quotes_and_dashes(_unwrap_markdown_fences(base))),
+    ]
+    for step in chain:
+        if step and step not in candidates:
+            candidates.append(step)
+    subs = _iter_json_substrings(base)
+    for s in subs:
+        if s not in candidates:
+            candidates.append(s)
+        fixed = _remove_trailing_commas(s)
+        if fixed not in candidates:
+            candidates.append(fixed)
+        fq = _normalize_quotes_and_dashes(fixed)
+        if fq not in candidates:
+            candidates.append(fq)
+
+    last_err: Optional[Exception] = None
+    for cand in candidates:
+        if not cand.strip():
+            continue
+        for version in (cand, _remove_trailing_commas(cand)):
+            if not version.strip():
+                continue
+            try:
+                data = _try_json_loads(version)
+                attempts.append("ok")
+                return data, attempts
+            except json.JSONDecodeError as e:
+                last_err = e
+                attempts.append(str(e))
+                continue
+    if last_err:
+        raise last_err
+    raise json.JSONDecodeError("no candidate", text[:50], 0)
+
+
 def parse_pasted_payload(raw: str) -> dict:
     """
-    Parsa il testo incollato: deve essere JSON oggetto o array (usa il primo elemento se array di personaggi).
+    Parsa il testo incollato: JSON oggetto o array; tollera rumore attorno al JSON.
 
     Raises:
-        ImportParseError: JSON invalido o contenuto inutilizzabile.
+        ImportParseError: nessun JSON decodificabile o contenuto inutilizzabile.
     """
     text = _strip_json_text(raw)
     if not text:
         raise ImportParseError("Incolla prima del testo o JSON.")
+
     try:
-        data = json.loads(text)
+        data, _attempts = _decode_pasted_structures(text)
     except json.JSONDecodeError as e:
-        raise ImportParseError(f"JSON non valido: {e}") from e
+        raise ImportParseError(
+            "Non sono riuscito a leggere dati strutturati nell’incolla. "
+            "Controlla di aver copiato un blocco completo dal browser (senza tagli a metà). "
+            f"Dettaglio: {e}"
+        ) from e
+
+    data = _unwrap_string_json_root(data)
 
     if isinstance(data, list):
         dicts = [x for x in data if isinstance(x, dict)]
@@ -466,7 +737,7 @@ def preview_summary(parsed: dict) -> str:
     if w:
         lines.append(f"Arma: {w.get('nome')} ({w.get('tipo')}) Lv.{w.get('livello')} ★{w.get('stelle')}")
     else:
-        lines.append("Arma: (nessuna dal JSON — resterà vuota o da compilare)")
+        lines.append("Arma: (non trovata nei dati copiati — resterà vuota o da compilare)")
     return "\n".join(lines)
 
 

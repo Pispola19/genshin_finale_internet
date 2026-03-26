@@ -2,6 +2,8 @@
 Applicazione principale - assembla e avvia GUI.
 Solo gestione eventi e visualizzazione. Logica e dati nel service layer.
 """
+import logging
+import math
 import os
 import subprocess
 import sys
@@ -9,6 +11,12 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 from config import PROJECT_ROOT, SLOT_UI, SLOT_DB, ELEMENTI, TIPI_ARMA, STATS, SET_ARTEFATTI, MOSTRA_PULSANTE_HOYOLAB
+from gui.form_checkpoint import (
+    load_and_apply_gui_checkpoint,
+    mark_gui_checkpoint_dirty,
+    save_gui_checkpoint_safe,
+)
+from gui.safe_ops import gui_safe_call, notify_unexpected
 from core.manual_import import (
     ImportParseError,
     apply_manual_import,
@@ -17,7 +25,45 @@ from core.manual_import import (
     preview_summary,
 )
 from core.services import AppService
+from core.dps_types import DpsResult
 from gui.widgets import AutocompleteCombobox, create_entry
+
+logger = logging.getLogger(__name__)
+
+
+def _gui_format_num_g(val) -> str:
+    """Numero sicuro per etichette (Treeview / DPS): niente NaN, niente crash."""
+    try:
+        x = float(val)
+        if math.isnan(x) or math.isinf(x):
+            return "—"
+        return f"{x:g}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _gui_tree_row_values(row, expected_len: int) -> tuple:
+    """Righe repository → tuple di stringhe della lunghezza attesa (anti-TclError Treeview)."""
+    cells = list(row) if row is not None else []
+    while len(cells) < expected_len:
+        cells.append("")
+    cells = cells[:expected_len]
+    return tuple("" if c is None else str(c) for c in cells)
+
+
+def _dps_ranking_fattori_cell(f: object) -> str:
+    """Testo compatto colonna moltiplicatori (ranking DPS GUI)."""
+    if not isinstance(f, dict):
+        return "—"
+    parts = []
+    if "elemento" in f:
+        parts.append(f"el×{_gui_format_num_g(f.get('elemento'))}")
+    if "em" in f:
+        parts.append(f"EM×{_gui_format_num_g(f.get('em'))}")
+    if "crit_adjust" in f:
+        parts.append(f"CR×{_gui_format_num_g(f.get('crit_adjust'))}")
+    return " ".join(parts) if parts else "—"
+
 
 QUESTIONARIO_DOCX = PROJECT_ROOT / "web" / "questionario_genshin_avanzato.docx"
 QUESTIONARIO_EMAIL = "shokran@hotmail.it"
@@ -42,6 +88,11 @@ PASSO 1 — Personaggio
 PASSO 2 — Statistiche (HP, ATK, DEF, EM, CR, CD, ER)
 Sono le stesse voci che vedi sulla scheda personaggio in gioco o su schermate tipo battaglia / attributi. Compila i numeri che vuoi tenere sotto controllo per la tua build.
 
+Import da HoYoLAB (copia-incolla dal sito, senza collegare account a quest’app)
+• In alto nella finestra: «Importa personaggio…» sulla barra colorata, oppure menu Dati → Importa personaggio….
+• «Dashboard» apre la pagina del programma nel browser (se usi il server in locale, avvialo prima oppure imposta l’indirizzo web nelle impostazioni del sistema).
+• Su Mac il menu «Dati» sta nella barra in alto dello schermo (vicino al nome dell’app), non sulla finestra.
+
 PASSO 3 — Arma
 Nome, tipo (Spada, Claymore, ecc.), livello, stelle, stat secondaria e valore: come nell’inventario arma nel gioco.
 
@@ -60,12 +111,13 @@ PASSO 6 — Talenti (7 casette, tutte nella stessa schermata)
 • Da 1 a 10 = livello del talento come nel gioco.
 
 Le prime tre righe sono quelle che contano per il combattimento diretto: Attacco normale (AA), Abilità elementale (tasto E), Tripudio (tasto Q).
-Le altre quattro sono “Extra 1–4”: servono solo come appunti; non entrano nel calcolo DPS del programma, anche se compili un numero.
+Questi tre livelli entrano anche nella «Stima rotazione» (barra in alto / menu Analisi): un indice che moltiplica il proxy danno della build in base a NA/E/Q, non il DPS reale del gioco.
+Le altre quattro sono “Extra 1–4”: servono solo come appunti; non entrano nel calcolo DPS del manufatto né nella rotazione, anche se compili un numero.
 
 PASSO 7 — Salvare sul computer (importante)
 1) Se il personaggio esiste già: premi LISTA, clicca sulla riga giusta, controlla i dati, poi SALVA.
 2) Se è nuovo: compila tutto, premi SALVA. Se il nome va bene, compare “Salvato” e il programma tiene in memoria l’id del personaggio.
-3) SALVA serve a scrivere tutto nel database sul tuo PC: senza salvataggio le modifiche si perdono quando chiudi.
+3) SALVA serve a scrivere tutto nel database sul tuo PC: senza salvataggio le modifiche si perdono quando chiudi. In più, alla chiusura della finestra (e a tratti dopo un salvataggio) il programma può copiare i database nella cartella «checkpoints» accanto ai file .db — così hai uno storico recente automatico. Disattiva con variabile d’ambiente GENSHIN_CHECKPOINT=0 se non la vuoi.
 4) NUOVO pulisce la scheda per crearne un’altra; non cancella i personaggi già salvati finché non usi CANCELLA.
 5) Per artefatti: dopo SALVA del personaggio, puoi assegnare Fiore/Piuma/… con SCEGLI.
 
@@ -86,13 +138,41 @@ class GenshinApp:
     def run(self):
         self._build_ui()
         self._bind_events()
+        try:
+            load_and_apply_gui_checkpoint(self)
+        except Exception:
+            logger.exception("ripristino checkpoint GUI")
+        self._start_periodic_gui_checkpoint()
         self.root.mainloop()
+
+    def _start_periodic_gui_checkpoint(self) -> None:
+        """Salvataggio leggero periodico del form (resilienza dopo errori silenziosi)."""
+
+        def tick() -> None:
+            try:
+                self.root.winfo_exists()
+            except tk.TclError:
+                return
+            try:
+                save_gui_checkpoint_safe(self)
+            except Exception:
+                pass
+            try:
+                self.root.after(45_000, tick)
+            except tk.TclError:
+                pass
+
+        try:
+            self.root.after(45_000, tick)
+        except tk.TclError:
+            pass
 
     def _build_ui(self):
         self.root = tk.Tk()
         self.root.title("Genshin Manager")
         self.root.geometry("1240x1120")
         self._build_menu()
+        self._build_header_bar()
         self._build_scrollable_main()
         self._build_personaggio_section()
         self._build_arma_section()
@@ -105,11 +185,43 @@ class GenshinApp:
         self.root.config(menu=menubar)
         data_m = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Dati", menu=data_m)
-        data_m.add_command(label="Import da copia (JSON / HoYoLAB manuale)…", command=self._import_da_copia)
+        data_m.add_command(label="Importa personaggio…", command=self._import_da_copia)
+        analisi_m = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Analisi", menu=analisi_m)
+        analisi_m.add_command(label="Stima rotazione DPS…", command=self._apri_stima_rotazione)
+
         help_m = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Aiuto", menu=help_m)
         help_m.add_command(label="Istruzioni (facili)", command=self._mostra_istruzioni)
         help_m.add_command(label="Apri questionario Word", command=self._apri_questionario_docx)
+
+    def _build_header_bar(self):
+        """Barra in alto: Dashboard web, Importa personaggio, ecc."""
+        bar = tk.Frame(self.root, bg="#e4e9ff", padx=10, pady=8)
+        bar.pack(side="top", fill="x")
+        tk.Label(bar, text="Navigazione rapida:", bg="#e4e9ff", fg="#2a3366", font=("Helvetica", 11, "bold")).pack(
+            side="left", padx=(0, 10)
+        )
+        tk.Button(bar, text="Dashboard", font=("Helvetica", 11), command=self._open_web_dashboard, padx=12).pack(
+            side="left", padx=(0, 6)
+        )
+        tk.Button(bar, text="Importa personaggio…", font=("Helvetica", 11), command=self._import_da_copia, padx=12).pack(
+            side="left", padx=(0, 6)
+        )
+        tk.Button(bar, text="Rotazione…", font=("Helvetica", 11), command=self._apri_stima_rotazione, padx=12).pack(
+            side="left", padx=(0, 6)
+        )
+
+    def _open_web_dashboard(self):
+        """Apre la dashboard Flask nel browser (server locale o base URL da ambiente)."""
+
+        def _open() -> None:
+            import webbrowser
+
+            base = (os.environ.get("GENSHIN_WEB_BASE") or "http://127.0.0.1:5001").rstrip("/")
+            webbrowser.open(f"{base}/dashboard.html")
+
+        gui_safe_call(self.root, _open)
 
     def _mostra_istruzioni(self):
         win = tk.Toplevel(self.root)
@@ -172,7 +284,7 @@ class GenshinApp:
     def _apri_questionario_docx(self):
         p = QUESTIONARIO_DOCX
         if not p.is_file():
-            messagebox.showerror("File assente", f"Non trovo il questionario:\n{p}")
+            messagebox.showinfo("Attenzione", "Non trovo il file del questionario nella cartella del programma.")
             return
         try:
             if sys.platform == "darwin":
@@ -181,25 +293,46 @@ class GenshinApp:
                 os.startfile(str(p))
             else:
                 subprocess.run(["xdg-open", str(p)], check=False)
-        except Exception as e:
-            messagebox.showerror("Errore", str(e))
+        except Exception:
+            logger.exception("_apri_questionario_docx")
+            notify_unexpected(self.root)
 
     def _import_da_copia(self):
-        """Import JSON incollato: nessun login HoYoLAB; vedi core/manual_import.py."""
+        """Import da payload incollato (logica in core/manual_import.py)."""
         win = tk.Toplevel(self.root)
-        win.title("Import dati — JSON manuale")
-        win.geometry("760x580")
-        win.minsize(560, 440)
+        win.title("Importa personaggio")
+        win.geometry("760x640")
+        win.minsize(560, 480)
 
-        hint = tk.Text(win, height=5, wrap="word", font=("Helvetica", 11), bg="#f4f6ff", relief="flat", padx=8, pady=8)
-        hint.pack(fill="x", padx=10, pady=(10, 4))
+        hint_wrap = tk.Frame(win, bg="#eef2ff")
+        hint_wrap.pack(fill="x", padx=10, pady=(12, 6))
+        tk.Label(
+            hint_wrap,
+            text="Come fare",
+            font=("Helvetica", 15, "bold"),
+            bg="#eef2ff",
+            fg="#1e2a6e",
+            anchor="w",
+        ).pack(fill="x", padx=12, pady=(10, 4))
+        hint = tk.Text(
+            hint_wrap,
+            height=6,
+            wrap="word",
+            font=("Helvetica", 14),
+            bg="#eef2ff",
+            fg="#222233",
+            relief="flat",
+            padx=12,
+            pady=(0, 12),
+            highlightthickness=0,
+        )
+        hint.pack(fill="x")
         hint.insert(
             "1.0",
-            "1) Accedi a HoYoLAB nel browser e apri Battle Chronicle.\n"
-            "2) F12 → Rete / Network → filtra XHR/fetch → seleziona un personaggio e individua una risposta JSON con nome, livello, fightPropMap (o propMap).\n"
-            "3) Tasto destro sulla risposta → Copia → Copia risposta (o salva JSON e incollalo qui).\n"
-            "4) Anteprima, poi Importa nuovo oppure Aggiorna scheda corrente.\n"
-            "Oppure incolla un JSON nel formato documentato in core/manual_import.py (chiavi: nome, livello, elemento, hp_flat, crit_rate, …).",
+            "1. Apri HoYoLAB nel browser.\n"
+            "2. Vai nella sezione dei tuoi personaggi (schede eroe / resoconto di battaglia, come sul sito).\n"
+            "3. Copia i dati del personaggio dalla pagina (su Mac ⌘C, su Windows Ctrl+C).\n"
+            "4. Incolla qui sotto nell’area grande, poi premi «Controlla dati».",
         )
         hint.config(state="disabled")
 
@@ -212,11 +345,15 @@ class GenshinApp:
         ys.pack(side="right", fill="y")
 
         choice_fr = tk.Frame(win)
-        tk.Label(choice_fr, text="Se nel JSON ci sono più personaggi:").pack(side="left", padx=(0, 8))
+        tk.Label(choice_fr, text="Se nei dati incollati c’è più di un personaggio, scegli quale importare:").pack(
+            side="left", padx=(0, 8)
+        )
         choice_var = tk.StringVar()
         choice_cb = ttk.Combobox(choice_fr, textvariable=choice_var, state="readonly", width=36)
 
-        preview_lbl = tk.Label(win, text="Premi Anteprima.", justify="left", anchor="nw", font=("Helvetica", 10))
+        preview_lbl = tk.Label(
+            win, text="Incolla qui sopra, poi premi «Controlla dati».", justify="left", anchor="nw", font=("Helvetica", 10)
+        )
         preview_lbl.pack(fill="x", padx=10, pady=6)
 
         parsed_holder: dict = {"p": None}
@@ -258,9 +395,9 @@ class GenshinApp:
 
         btns = tk.Frame(win)
         btns.pack(fill="x", padx=10, pady=10)
-        tk.Button(btns, text="Anteprima", command=refresh_preview).pack(side="left", padx=4)
+        tk.Button(btns, text="Controlla dati", command=refresh_preview).pack(side="left", padx=4)
         tk.Button(btns, text="Importa come nuovo personaggio", command=lambda: _do_import(True)).pack(side="left", padx=4)
-        btn_upd = tk.Button(btns, text="Aggiorna scheda aperta (ID corrente)", command=lambda: _do_import(False))
+        btn_upd = tk.Button(btns, text="Aggiorna la scheda che ho aperta", command=lambda: _do_import(False))
         btn_upd.pack(side="left", padx=4)
 
         def _do_import(as_new: bool):
@@ -269,27 +406,38 @@ class GenshinApp:
                     refresh_preview()
                 p = _effective_parsed()
                 if not p:
-                    messagebox.showwarning("Import", "Nessun dato valido: usa Anteprima dopo aver incollato il JSON.", parent=win)
+                    messagebox.showwarning(
+                        "Importa personaggio",
+                        "Non riesco a leggere nulla di valido. Incolla i dati nell’area grande, poi premi «Controlla dati».",
+                        parent=win,
+                    )
                     return
                 sid = None if as_new else self.selected_id
                 if not as_new and sid is None:
-                    messagebox.showwarning("Import", "Nessuna scheda selezionata: usa Lista o Importa come nuovo.", parent=win)
+                    messagebox.showwarning(
+                        "Importa personaggio",
+                        "Non c’è una scheda aperta: usa Lista per caricare un personaggio, oppure «Importa come nuovo personaggio».",
+                        parent=win,
+                    )
                     return
                 ok, msg = self.service.valida_nome(p["character"]["nome"], sid if sid else None)
                 if not ok:
-                    messagebox.showerror("Import", msg, parent=win)
+                    messagebox.showinfo("Attenzione", msg, parent=win)
                     return
                 new_id = apply_manual_import(self.service, p, sid, touch_equipment=False)
                 self.selected_id = new_id
                 dati = self.service.carica_dati_completi(new_id)
                 if dati:
                     self._populate_form(dati)
+                save_gui_checkpoint_safe(self)
                 win.destroy()
-                messagebox.showinfo("Import", f"Salvato. ID personaggio: {new_id}")
-            except ImportParseError as e:
-                messagebox.showerror("Import", str(e), parent=win)
-            except Exception as e:
-                messagebox.showerror("Import", str(e), parent=win)
+                messagebox.showinfo("Importa personaggio", "Fatto! La scheda è stata salvata e aggiornata in questo programma.")
+            except ImportParseError:
+                logger.exception("import manual ImportParseError")
+                notify_unexpected(win)
+            except Exception:
+                logger.exception("import manual")
+                notify_unexpected(win)
 
         def _sync_update_btn_state(_evt=None):
             btn_upd.config(state="normal" if self.selected_id is not None else "disabled")
@@ -458,7 +606,7 @@ class GenshinApp:
         tk.Label(
             tf,
             text="Talenti (7): scrivi “-”, oppure 0, oppure il livello 1–10. "
-            "AA, E, Q = combattimento; Extra 1–4 = solo appunti (non nel calcolo DPS).",
+            "AA, E, Q = combattimento e stima rotazione (barra Rotazione…); Extra 1–4 = solo appunti.",
             font=("Helvetica", 11),
             wraplength=900,
             justify="left",
@@ -504,6 +652,8 @@ class GenshinApp:
         for w in self.artefatti_widgets.values():
             w["label_art"].config(text="—")
             w["artefatto_id"] = None
+        save_gui_checkpoint_safe(self)
+        mark_gui_checkpoint_dirty(self)
 
     def _set_entry(self, entry, val):
         entry.delete(0, tk.END)
@@ -511,34 +661,41 @@ class GenshinApp:
 
     def _populate_form(self, dati: dict):
         """Popola form con dati già formattati dal service."""
-        self.nome_var.set(dati["nome"])
-        self._set_entry(self.livello_entry, dati["livello"])
-        self.elemento_var.set(dati["elemento"])
-        stats = [dati["hp_flat"], dati["atk_flat"], dati["def_flat"], dati["em_flat"],
-                 dati["cr"], dati["cd"], dati["er"]]
-        for e, v in zip(self._personaggio_entries, stats):
-            self._set_entry(e, v)
+        try:
+            self.nome_var.set(dati["nome"])
+            self._set_entry(self.livello_entry, dati["livello"])
+            self.elemento_var.set(dati["elemento"])
+            stats = [dati["hp_flat"], dati["atk_flat"], dati["def_flat"], dati["em_flat"],
+                     dati["cr"], dati["cd"], dati["er"]]
+            for e, v in zip(self._personaggio_entries, stats):
+                self._set_entry(e, v)
 
-        arma = dati["arma"]
-        self._set_entry(self.arma_nome_entry, arma["nome"])
-        self.tipo_var.set(arma["tipo"])
-        self._set_entry(self.arma_liv_entry, arma["livello"])
-        self._set_entry(self.arma_stelle_entry, arma["stelle"])
-        self._set_entry(self.arma_atk_entry, arma["atk_base"])
-        self.arma_stat_var.set(arma["stat_secondaria"])
-        self._set_entry(self.arma_val_entry, arma["valore_stat"])
+            arma = dati["arma"]
+            self._set_entry(self.arma_nome_entry, arma["nome"])
+            self.tipo_var.set(arma["tipo"])
+            self._set_entry(self.arma_liv_entry, arma["livello"])
+            self._set_entry(self.arma_stelle_entry, arma["stelle"])
+            self._set_entry(self.arma_atk_entry, arma["atk_base"])
+            self.arma_stat_var.set(arma["stat_secondaria"])
+            self._set_entry(self.arma_val_entry, arma["valore_stat"])
 
-        for cb, v in zip(self.cost_entries, dati["costellazioni"]):
-            cb.set("1" if v else "0")
-        tal = dati["talenti"] or []
-        for i, e in enumerate(self.talenti_entries):
-            self._set_entry(e, tal[i] if i < len(tal) else "-")
+            for cb, v in zip(self.cost_entries, dati["costellazioni"]):
+                cb.set("1" if v else "0")
+            tal = dati["talenti"] or []
+            for i, e in enumerate(self.talenti_entries):
+                self._set_entry(e, tal[i] if i < len(tal) else "-")
 
-        for slot_ui, slot_db in self.slot_map.items():
-            art = dati["artefatti"].get(slot_db)
-            w = self.artefatti_widgets[slot_ui]
-            w["artefatto_id"] = art["id"] if art else None
-            w["label_art"].config(text=art["label"] if art else "—")
+            for slot_ui, slot_db in self.slot_map.items():
+                art = dati["artefatti"].get(slot_db)
+                w = self.artefatti_widgets[slot_ui]
+                w["artefatto_id"] = art["id"] if art else None
+                w["label_art"].config(text=art["label"] if art else "—")
+        except Exception:
+            logger.exception("_populate_form")
+            notify_unexpected(self.root)
+            return
+        save_gui_checkpoint_safe(self)
+        mark_gui_checkpoint_dirty(self)
 
     def _form_personaggio(self):
         return {
@@ -580,7 +737,7 @@ class GenshinApp:
     def _on_salva(self):
         ok, msg = self.service.valida_nome(self._form_personaggio()["nome"], self.selected_id)
         if not ok:
-            messagebox.showerror("Errore", msg)
+            messagebox.showinfo("Attenzione", msg)
             return
         try:
             self.selected_id = self.service.salva_completo(
@@ -594,9 +751,17 @@ class GenshinApp:
             # Aggiorna autocomplete con eventuali nuovi nomi
             self.nome_combo["values"] = self.service.nomi_per_autocomplete()
             self.nome_combo._values = self.nome_combo["values"]
+            try:
+                from core.checkpoint import maybe_checkpoint_after_save
+
+                maybe_checkpoint_after_save()
+            except Exception:
+                pass
+            save_gui_checkpoint_safe(self)
             messagebox.showinfo("OK", "Salvato.")
-        except Exception as e:
-            messagebox.showerror("Errore", str(e))
+        except Exception:
+            logger.exception("_on_salva")
+            notify_unexpected(self.root)
 
     def _on_cancella(self):
         if self.selected_id is None:
@@ -607,10 +772,17 @@ class GenshinApp:
                 self.selected_id = None
                 self._clear_form()
                 messagebox.showinfo("OK", "Eliminato.")
-            except Exception as e:
-                messagebox.showerror("Errore", str(e))
+            except Exception:
+                logger.exception("_on_cancella")
+                notify_unexpected(self.root)
 
     def _on_lista(self):
+        try:
+            righe = self.service.lista_personaggi_righe()
+        except Exception:
+            logger.exception("_on_lista")
+            notify_unexpected(self.root)
+            return
         win = tk.Toplevel(self.root)
         win.title("Lista Personaggi")
         win.geometry("550x400")
@@ -619,18 +791,28 @@ class GenshinApp:
             tree.heading(col, text=col)
             tree.column(col, anchor="center")
         tree.pack(fill="both", expand=True)
-        for r in self.service.lista_personaggi_righe():
+        for r in righe:
             tree.insert("", "end", values=r)
 
         def on_select(event):
             sel = tree.selection()
             if sel:
-                id_pg = int(tree.item(sel[0], "values")[0])
-                dati = self.service.carica_dati_completi(id_pg)
+                try:
+                    id_pg = int(tree.item(sel[0], "values")[0])
+                except (ValueError, TypeError, tk.TclError):
+                    notify_unexpected(win)
+                    return
+                try:
+                    dati = self.service.carica_dati_completi(id_pg)
+                except Exception:
+                    logger.exception("carica_dati_completi lista")
+                    notify_unexpected(win)
+                    return
                 if dati:
                     self.selected_id = id_pg
                     self._populate_form(dati)
                 win.destroy()
+
         tree.bind("<<TreeviewSelect>>", on_select)
 
     def _on_pulisci_test(self):
@@ -649,8 +831,9 @@ class GenshinApp:
                 messagebox.showinfo("OK", f"Rimossi {n} entrate di test.")
             else:
                 messagebox.showinfo("Info", "Nessuna entrata di test trovata.")
-        except Exception as e:
-            messagebox.showerror("Errore", str(e))
+        except Exception:
+            logger.exception("_on_pulisci_test")
+            notify_unexpected(self.root)
 
     def _scegli_artefatto(self, slot_ui):
         if self.selected_id is None:
@@ -670,37 +853,327 @@ class GenshinApp:
             tree.column(col, width=100)
         tree.pack(fill="both", expand=True)
         for r in righe:
-            tree.insert("", "end", values=r)
+            tree.insert("", "end", values=_gui_tree_row_values(r, 5))
 
         def on_sel(event):
             sel = tree.selection()
             if sel:
-                art_id = int(tree.item(sel[0], "values")[0])
+                try:
+                    vals = tree.item(sel[0], "values")
+                    if not vals:
+                        return
+                    art_id = int(str(vals[0]).strip())
+                except (ValueError, TypeError, tk.TclError):
+                    messagebox.showwarning("Selezione", "Riga non valida: impossibile leggere l'ID.", parent=win)
+                    return
                 label = self.service.formato_label_artefatto(art_id)
                 if label:
                     self.artefatti_widgets[slot_ui]["artefatto_id"] = art_id
                     self.artefatti_widgets[slot_ui]["label_art"].config(text=label)
+                    save_gui_checkpoint_safe(self)
+                    mark_gui_checkpoint_dirty(self)
                 win.destroy()
         tree.bind("<<TreeviewSelect>>", on_sel)
 
     def _togli_artefatto(self, slot_ui):
         self.artefatti_widgets[slot_ui]["artefatto_id"] = None
         self.artefatti_widgets[slot_ui]["label_art"].config(text="—")
+        save_gui_checkpoint_safe(self)
+        mark_gui_checkpoint_dirty(self)
 
     def _mostra_dps(self, slot_ui):
         aid = self.artefatti_widgets[slot_ui].get("artefatto_id")
         if not aid:
             messagebox.showinfo("Info", "Nessun artefatto equipaggiato.")
             return
-        msg = self.service.formato_messaggio_dps(aid)
-        messagebox.showinfo("DPS", msg)
+        try:
+            res = self.service.dps_result_artefatto(aid)
+        except Exception:
+            logger.exception("_mostra_dps")
+            notify_unexpected(self.root)
+            return
+        if not res:
+            notify_unexpected(self.root)
+            return
+        self._DpsResultWindow(self.root, res).show()
+
+    def _apri_stima_rotazione(self):
+        if self.selected_id is None:
+            messagebox.showwarning(
+                "Attenzione",
+                "Seleziona prima un personaggio (Lista) e carica la scheda.",
+                parent=self.root,
+            )
+            return
+        try:
+            data = self.service.get_rotation_stima(self.selected_id)
+        except Exception:
+            logger.exception("_apri_stima_rotazione")
+            notify_unexpected(self.root)
+            return
+        if not data.get("ok"):
+            notify_unexpected(self.root)
+            return
+        self._RotationStimaWindow(self.root, data).show()
 
     def _apri_inventario(self):
         self._InventarioWindow(self.root, self.service).show()
 
     def _on_closing(self):
+        try:
+            save_gui_checkpoint_safe(self)
+        except Exception:
+            pass
+        try:
+            from core.checkpoint import run_automatic_checkpoint
+
+            run_automatic_checkpoint("exit")
+        except Exception:
+            pass
         self.service.close()
         self.root.destroy()
+
+    class _DpsResultWindow:
+        """Finestra DPS / indice manufatto con CombatStats, classifica e breakdown."""
+
+        def __init__(self, parent: tk.Misc, res: DpsResult):
+            self.parent = parent
+            self.res = res
+
+        def show(self) -> None:
+            try:
+                self._show_impl()
+            except Exception:
+                logger.exception("_DpsResultWindow.show")
+                notify_unexpected(self.parent)
+
+        def _show_impl(self) -> None:
+            res = self.res
+            win = tk.Toplevel(self.parent)
+            win.transient(self.parent)
+            aid = getattr(res, "artifact_id", None)
+            win.title(f"DPS — manufatto #{aid if aid is not None else '—'}")
+            win.geometry("660x560")
+            win.minsize(480, 400)
+
+            pad = {"padx": 12, "pady": 6}
+            head = tk.Frame(win)
+            head.pack(fill="x", **pad)
+            label_txt = str(getattr(res, "display_label_it", None) or "").strip() or (
+                "Indice manufatto confrontato sui personaggi salvati."
+            )
+            tk.Label(
+                head,
+                text=label_txt,
+                font=("Helvetica", 11),
+                wraplength=600,
+                justify="left",
+            ).pack(anchor="w")
+            val_fr = tk.Frame(head)
+            val_fr.pack(fill="x", pady=(8, 0))
+            tk.Label(val_fr, text="Valore principale:", font=("Helvetica", 10, "bold")).pack(side="left")
+            val_str = _gui_format_num_g(getattr(res, "value_display", None))
+            tk.Label(val_fr, text=val_str, font=("Helvetica", 14, "bold")).pack(side="left", padx=8)
+            unit = str(getattr(res, "unit", "") or "—")
+            ver = str(getattr(res, "model_version", "") or "")
+            tk.Label(
+                val_fr,
+                text=f"({unit}) · modello v{ver}",
+                font=("Helvetica", 9),
+            ).pack(side="left")
+
+            warnings = getattr(res, "warnings", None) or []
+            if warnings:
+                wf = tk.Frame(win)
+                wf.pack(fill="x", **pad)
+                for w in warnings:
+                    tk.Label(wf, text=f"⚠ {w}", fg="#b45309", wraplength=600, justify="left").pack(anchor="w")
+
+            nb = ttk.Notebook(win)
+            nb.pack(fill="both", expand=True, padx=8, pady=(0, 4))
+
+            tab_rank = tk.Frame(nb)
+            nb.add(tab_rank, text="Classifica personaggi")
+            cols = ("pos", "nome", "elem", "score", "fattori")
+            tree = ttk.Treeview(tab_rank, columns=cols, show="headings", height=14)
+            for c, h, w in (
+                ("pos", "#", 32),
+                ("nome", "Personaggio", 160),
+                ("elem", "El.", 52),
+                ("score", "Indice", 72),
+                ("fattori", "Moltiplicatori (elem·EM·CR)", 210),
+            ):
+                tree.heading(c, text=h)
+                tree.column(c, width=w)
+            sc = ttk.Scrollbar(tab_rank, orient="vertical", command=tree.yview)
+            tree.configure(yscrollcommand=sc.set)
+            tree.pack(side="left", fill="both", expand=True)
+            sc.pack(side="right", fill="y")
+            ranking = getattr(res, "ranking", None) or []
+            for i, row in enumerate(ranking, start=1):
+                if not isinstance(row, dict):
+                    continue
+                ftxt = _dps_ranking_fattori_cell(row.get("fattori"))
+                tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        i,
+                        str(row.get("nome", "") or ""),
+                        str(row.get("elemento", "") or ""),
+                        _gui_format_num_g(row.get("score")),
+                        ftxt,
+                    ),
+                )
+
+            tab_stats = tk.Frame(nb)
+            nb.add(tab_stats, text="Statistiche (pezzo)")
+            mono = ("Menlo", 10) if sys.platform == "darwin" else ("Consolas", 10)
+            txt_s = tk.Text(tab_stats, height=16, width=78, font=mono, wrap="word")
+            txt_s.pack(fill="both", expand=True, padx=6, pady=6)
+            cs = getattr(res, "combat_stats", None)
+            if cs is not None and hasattr(cs, "format_summary_it"):
+                try:
+                    txt_s.insert("1.0", cs.format_summary_it())
+                except Exception:
+                    txt_s.insert("1.0", "— (riepilogo statistiche non disponibile)")
+            else:
+                txt_s.insert("1.0", "—")
+            txt_s.configure(state="disabled")
+
+            tab_det = tk.Frame(nb)
+            nb.add(tab_det, text="Dettaglio")
+            txt_d = tk.Text(tab_det, height=16, width=78, font=("Helvetica", 10), wrap="word")
+            txt_d.pack(fill="both", expand=True, padx=6, pady=6)
+            lines: list[str] = []
+            lbl = getattr(res, "artifact_label", None)
+            if lbl:
+                lines.append(f"Pezzo: {lbl}")
+                lines.append("")
+            breakdown = getattr(res, "breakdown", None) or {}
+            if isinstance(breakdown, dict):
+                for k, v in breakdown.items():
+                    lines.append(f"{k}: {v}")
+            else:
+                lines.append(str(breakdown))
+            if ranking:
+                lines.append("")
+                lines.append("— Classifica (stesso ordine della tab) —")
+                for i, row in enumerate(ranking, start=1):
+                    if not isinstance(row, dict):
+                        continue
+                    nm = str(row.get("nome", "") or "—")
+                    sc = _gui_format_num_g(row.get("score"))
+                    lines.append(f"{i}. {nm}: indice {sc}")
+                    f = row.get("fattori")
+                    if isinstance(f, dict):
+                        lines.append(
+                            f"   base {_gui_format_num_g(f.get('base'))} · elemento ×{_gui_format_num_g(f.get('elemento'))} "
+                            f"· EM ×{_gui_format_num_g(f.get('em'))} · CR ×{_gui_format_num_g(f.get('crit_adjust'))}"
+                        )
+            txt_d.insert("1.0", "\n".join(lines) if lines else "—")
+            txt_d.configure(state="disabled")
+
+            tk.Button(win, text="Chiudi", command=win.destroy).pack(pady=(4, 12))
+
+    class _RotationStimaWindow:
+        """Stima indice rotazione (v0.1): proxy build × fattore talenti NA/E/Q; stile come DPS manufatto."""
+
+        def __init__(self, parent: tk.Misc, data: dict):
+            self.parent = parent
+            self.data = data if isinstance(data, dict) else {}
+
+        def show(self) -> None:
+            try:
+                self._show_impl()
+            except Exception:
+                logger.exception("_RotationStimaWindow.show")
+                notify_unexpected(self.parent)
+
+        def _show_impl(self) -> None:
+            d = self.data
+            win = tk.Toplevel(self.parent)
+            win.transient(self.parent)
+            nome = str(d.get("personaggio_nome") or "").strip() or "Personaggio"
+            win.title(f"Stima rotazione — {nome}")
+            win.geometry("680x560")
+            win.minsize(520, 420)
+            pad = {"padx": 12, "pady": 6}
+
+            head = tk.Frame(win)
+            head.pack(fill="x", **pad)
+            tk.Label(
+                head,
+                text=str(d.get("note_it") or ""),
+                font=("Helvetica", 10),
+                wraplength=620,
+                justify="left",
+            ).pack(anchor="w")
+
+            row = tk.Frame(head)
+            row.pack(fill="x", pady=(10, 0))
+            tk.Label(row, text="Indice rotazione:", font=("Helvetica", 10, "bold")).pack(side="left")
+            tk.Label(
+                row,
+                text=_gui_format_num_g(d.get("rotation_index")),
+                font=("Helvetica", 18, "bold"),
+            ).pack(side="left", padx=10)
+            tk.Label(
+                row,
+                text=f"proxy × {_gui_format_num_g(d.get('rotation_multiplier'))} · v{d.get('model_version') or '—'}",
+                font=("Helvetica", 9),
+            ).pack(side="left")
+
+            row2 = tk.Frame(head)
+            row2.pack(fill="x", pady=(4, 0))
+            tk.Label(row2, text="Proxy build:", font=("Helvetica", 10)).pack(side="left")
+            tk.Label(row2, text=_gui_format_num_g(d.get("damage_proxy")), font=("Helvetica", 10)).pack(
+                side="left", padx=8
+            )
+            tk.Label(row2, text=f"preset: {d.get('preset') or '—'}", font=("Helvetica", 10)).pack(side="left", padx=12)
+
+            for w in d.get("warnings") or []:
+                tk.Label(head, text=f"⚠ {w}", fg="#b45309", wraplength=620, justify="left").pack(
+                    anchor="w", pady=(6, 0)
+                )
+
+            nb = ttk.Notebook(win)
+            nb.pack(fill="both", expand=True, padx=8, pady=(4, 0))
+
+            tab_t = tk.Frame(nb)
+            nb.add(tab_t, text="Talenti e pesi")
+            mono = ("Menlo", 10) if sys.platform == "darwin" else ("Consolas", 10)
+            txt_t = tk.Text(tab_t, height=18, width=80, font=mono, wrap="word")
+            txt_t.pack(fill="both", expand=True, padx=6, pady=6)
+            lines = [
+                "Livelli talento (AA, E, Q):",
+                repr(d.get("talent_levels")),
+                "",
+                "Moltiplicatori indicativi:",
+                repr(d.get("talent_multipliers")),
+                "",
+                "Pesi NA / E / Q (dopo scala ER sul burst):",
+                repr(d.get("weights")),
+            ]
+            txt_t.insert("1.0", "\n".join(lines))
+            txt_t.configure(state="disabled")
+
+            tab_s = tk.Frame(nb)
+            nb.add(tab_s, text="Statistiche totali")
+            txt_s = tk.Text(tab_s, height=18, width=80, font=mono, wrap="word")
+            txt_s.pack(fill="both", expand=True, padx=6, pady=6)
+            summary = str(d.get("combat_totale_summary_it") or "—")
+            txt_s.insert("1.0", summary)
+            txt_s.configure(state="disabled")
+
+            tab_n = tk.Frame(nb)
+            nb.add(tab_n, text="Nota proxy")
+            txt_n = tk.Text(tab_n, height=18, width=80, font=("Helvetica", 10), wrap="word")
+            txt_n.pack(fill="both", expand=True, padx=6, pady=6)
+            txt_n.insert("1.0", str(d.get("damage_proxy_note_it") or "—"))
+            txt_n.configure(state="disabled")
+
+            tk.Button(win, text="Chiudi", command=win.destroy).pack(pady=(4, 12))
 
     class _InventarioWindow:
         """Finestra inventario artefatti. Solo UI ed eventi."""
@@ -722,8 +1195,17 @@ class GenshinApp:
             def refresh():
                 for i in tree.get_children():
                     tree.delete(i)
-                for r in self.service.lista_artefatti_inventario_righe():
-                    tree.insert("", "end", values=r)
+                try:
+                    righe = self.service.lista_artefatti_inventario_righe()
+                except Exception:
+                    logger.exception("inventario refresh")
+                    notify_unexpected(win)
+                    return
+                for r in righe:
+                    try:
+                        tree.insert("", "end", values=_gui_tree_row_values(r, 7))
+                    except tk.TclError:
+                        continue
             refresh()
 
             tk.Button(win, text="+ Registra nuovo artefatto", command=lambda: self._form_aggiungi(win, refresh)).pack(pady=5)

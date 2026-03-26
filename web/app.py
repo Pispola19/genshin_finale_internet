@@ -1,13 +1,58 @@
 """API Flask per Genshin Manager Web - espone servizi Python."""
+import os
+import secrets
+from datetime import timedelta
+
 from config import PROJECT_ROOT
-from flask import Flask, request, jsonify, send_from_directory, redirect
+from flask import Flask, request, jsonify, send_from_directory, redirect, session
+from werkzeug.middleware.proxy_fix import ProxyFix
+
+from web.web_write_auth import (
+    SESSION_WRITE_KEY,
+    gate_write,
+    password_matches,
+    require_write_auth,
+    write_password_configured,
+)
 
 ROOT = PROJECT_ROOT
 
 app = Flask(__name__, static_folder=".", static_url_path="")
 app.config["JSON_AS_ASCII"] = False
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=14)
+
+_secret = (os.environ.get("SECRET_KEY") or "").strip()
+if not _secret:
+    _secret = secrets.token_hex(32)
+app.secret_key = _secret
+
+# Cookie sessione: HTTPS su Render / produzione
+_is_production = bool(
+    (os.environ.get("RENDER") or "").strip()
+    or (os.environ.get("GENSHIN_SESSION_SECURE") or "").lower() in ("1", "true", "yes")
+)
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = _is_production
+
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 SFONDI_DIR = ROOT / "sfondi"
+
+
+@app.after_request
+def _security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    # Script solo da questo sito; stili inline lasciati per le pagine HTML esistenti
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; "
+        "base-uri 'self'; form-action 'self'",
+    )
+    return response
 
 # Inizializza servizi (lazy)
 _service = None
@@ -19,6 +64,40 @@ def get_service():
         from core.services import AppService
         _service = AppService()
     return _service
+
+
+# --- Autenticazione scritture (opzionale, vedi GENSHIN_WEB_WRITE_PASSWORD) ---
+@app.route("/api/auth/status")
+def api_auth_status():
+    need = write_password_configured()
+    return jsonify(
+        {
+            "write_auth_required": need,
+            "authenticated": True if not need else (session.get(SESSION_WRITE_KEY) is True),
+        }
+    )
+
+
+@app.route("/api/auth/login", methods=["POST"])
+def api_auth_login():
+    if not write_password_configured():
+        return jsonify({"ok": True, "authenticated": True, "message": "Password web non configurata sul server."})
+    j = request.get_json(silent=True) or {}
+    pw = j.get("password")
+    if not isinstance(pw, str):
+        pw = ""
+    if password_matches(pw):
+        session.clear()
+        session.permanent = True
+        session[SESSION_WRITE_KEY] = True
+        return jsonify({"ok": True, "authenticated": True})
+    return jsonify({"error": "Password errata", "code": "login_failed"}), 401
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+def api_auth_logout():
+    session.pop(SESSION_WRITE_KEY, None)
+    return jsonify({"ok": True})
 
 
 # --- Personaggio ---
@@ -52,6 +131,7 @@ def api_personaggio(pk):
 
 
 @app.route("/api/personaggio", methods=["POST"])
+@require_write_auth
 def api_salva_personaggio():
     """Salva personaggio completo."""
     svc = get_service()
@@ -76,13 +156,85 @@ def api_salva_personaggio():
         return jsonify({"error": str(e)}), 400
 
 
+@app.route("/api/personaggio/import-incolla", methods=["POST"])
+@require_write_auth
+def api_personaggio_import_incolla():
+    """Import manuale da JSON incollato (stesso parser della GUI Tk)."""
+    from core.manual_import import (
+        ImportParseError,
+        apply_manual_import,
+        list_character_choices,
+        parse_pasted_payload,
+        preview_summary,
+    )
+
+    j = request.get_json() or {}
+    raw = j.get("raw")
+    if not isinstance(raw, str):
+        raw = ""
+    try:
+        parsed = parse_pasted_payload(raw)
+    except ImportParseError as e:
+        return jsonify({"error": str(e)}), 400
+
+    character_nome = (j.get("character_nome") or "").strip()
+    if character_nome:
+        chs = list_character_choices(parsed)
+        sel = next((c for c in chs if (c.get("nome") or "") == character_nome), None)
+        if sel:
+            parsed = {**parsed, "character": sel}
+
+    preview_only = bool(j.get("preview"))
+    if preview_only:
+        chs = list_character_choices(parsed)
+        out = {
+            "ok": True,
+            "summary": preview_summary(parsed),
+            "nome": (parsed.get("character") or {}).get("nome"),
+        }
+        names = [c.get("nome") for c in chs if c.get("nome")]
+        if len(names) > 1:
+            out["choices"] = names
+        return jsonify(out)
+
+    svc = get_service()
+    nome_pg = (parsed.get("character") or {}).get("nome") or ""
+    id_pg = j.get("id")
+    if id_pg is not None:
+        try:
+            id_pg = int(id_pg)
+        except (TypeError, ValueError):
+            id_pg = None
+
+    ok_nome, msg = svc.valida_nome(nome_pg, id_pg if id_pg else None)
+    if not ok_nome:
+        return jsonify({"error": msg}), 400
+
+    try:
+        new_id = apply_manual_import(svc, parsed, id_pg, touch_equipment=False)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+    dati = svc.carica_dati_completi(new_id)
+    return jsonify(
+        {
+            "ok": True,
+            "id": new_id,
+            "summary": preview_summary(parsed),
+            "dati": dati,
+        }
+    )
+
+
 @app.route("/api/personaggio/<int:pk>", methods=["DELETE"])
+@require_write_auth
 def api_elimina_personaggio(pk):
     get_service().elimina_personaggio(pk)
     return jsonify({"ok": True})
 
 
 @app.route("/api/personaggi/pulizia-test", methods=["POST"])
+@require_write_auth
 def api_pulizia_test():
     """Elimina personaggi di test (test, Test1, Test3, ecc.)."""
     n = get_service().rimuovi_entrate_test()
@@ -101,6 +253,7 @@ def api_artefatti():
 
 
 @app.route("/api/artefatti", methods=["POST"])
+@require_write_auth
 def api_aggiungi_artefatto():
     """Registra nuovo artefatto con main stat e 4 substat."""
     j = request.get_json() or {}
@@ -114,6 +267,10 @@ def api_aggiungi_artefatto():
 @app.route("/api/artefatti/<int:aid>", methods=["GET", "PUT", "DELETE"])
 def api_artefatto_by_id(aid):
     """GET dettaglio; PUT aggiorna stats; DELETE rimuove (fodder / pulizia)."""
+    if request.method != "GET":
+        denied = gate_write()
+        if denied:
+            return denied
     svc = get_service()
     if request.method == "GET":
         d = svc.dettaglio_artefatto_json(aid)
@@ -180,6 +337,7 @@ def api_artefatti_per_equip():
 
 
 @app.route("/api/artefatti/<int:aid>/utilizzatore", methods=["PUT"])
+@require_write_auth
 def api_artefatto_utilizzatore(aid):
     """Assegna a personaggio (body JSON personaggio_id) o libera (null)."""
     j = request.get_json() if request.is_json else {}
@@ -215,6 +373,16 @@ def api_build(personaggio_id):
     data = get_service().get_build_analysis(personaggio_id)
     if data is None:
         return jsonify({"error": "Personaggio non trovato"}), 404
+    return jsonify(data)
+
+
+@app.route("/api/build/<int:personaggio_id>/rotation")
+def api_build_rotation(personaggio_id):
+    """Stima rotazione (indice derivato dal proxy build + talenti AA/E/Q)."""
+    preset = (request.args.get("preset") or "equilibrato").strip()
+    data = get_service().get_rotation_stima(personaggio_id, preset=preset)
+    if not data.get("ok"):
+        return jsonify(data), 404 if "non trovato" in str(data.get("message_it") or "").lower() else 400
     return jsonify(data)
 
 
@@ -257,6 +425,11 @@ def page_build():
     return send_from_directory(app.static_folder, "build.html")
 
 
+@app.route("/rotation.html")
+def page_rotation():
+    return send_from_directory(app.static_folder, "rotation.html")
+
+
 @app.route("/team.html")
 def page_team():
     return send_from_directory(app.static_folder, "team.html")
@@ -282,11 +455,36 @@ def page_istruzioni():
     return send_from_directory(app.static_folder, "istruzioni.html")
 
 
+@app.route("/login.html")
+def page_login():
+    return send_from_directory(app.static_folder, "login.html")
+
+
 @app.route("/sfondi/<path:filename>")
 def sfondi_static(filename):
     """Immagini di sfondo dalla cartella progetto sfondi/."""
     return send_from_directory(SFONDI_DIR, filename)
 
+
+def _register_server_checkpoint_atexit() -> None:
+    """Opzionale: snapshot allo stop del processo (single worker / dev). Disattiva con GENSHIN_CHECKPOINT_WEB=0."""
+    v = (os.environ.get("GENSHIN_CHECKPOINT_WEB") or "0").strip().lower()
+    if v in ("0", "false", "no", "off"):
+        return
+    import atexit
+
+    def _on_stop() -> None:
+        try:
+            from core.checkpoint import run_automatic_checkpoint
+
+            run_automatic_checkpoint("server_stop")
+        except Exception:
+            pass
+
+    atexit.register(_on_stop)
+
+
+_register_server_checkpoint_atexit()
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)

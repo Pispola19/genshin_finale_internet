@@ -1,6 +1,7 @@
 #!/bin/bash
-# Genshin Manager — avvio server web (doppio clic per aprire in Terminale).
-# Avvio automatico all’accesso: vedi istruzioni sotto o usa mac/com.genshinmanager.web.plist
+# Genshin Manager — clone locale «genshin_finale_internet» (mirror per deploy Render).
+# Produzione: https://genshin-finale-internet-1.onrender.com — stesso codice; avvio locale = debug.
+# Avvio automatico: vedi sotto / mac/com.genshinmanager.web.plist
 
 set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,7 +17,7 @@ else
   PYTHON="python3"
 fi
 
-echo "Genshin Manager — cartella: $DIR"
+echo "Genshin Manager [genshin_finale_internet / mirror Render] — cartella: $DIR"
 echo "Python: $PYTHON"
 echo ""
 echo "Per avvio automatico all’accesso:"

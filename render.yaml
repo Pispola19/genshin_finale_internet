@@ -13,6 +13,9 @@ services:
         value: "3.11.9"
       - key: SECRET_KEY
         generateValue: true
+      # Sicurezza: in Render → Environment aggiungi (non committare la password):
+      #   GENSHIN_WEB_WRITE_PASSWORD = password lunga per chi può salvare/importare in web
+      # Cookie HTTPS: RENDER è rilevato in web/app.py → SESSION_COOKIE_SECURE attivo.
       # Opzionale: disco persistente Render (consigliato per non perdere DB ai redeploy)
       # - key: GINSHIN_DATA_DIR
       #   value: /var/data

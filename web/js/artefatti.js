@@ -8,6 +8,19 @@ function apiBase() {
 }
 const API = apiBase();
 
+const EQUIP_SLOTS = [
+  { k: "fiore", label: "Fiore" },
+  { k: "piuma", label: "Piuma" },
+  { k: "sabbie", label: "Sabbie" },
+  { k: "calice", label: "Calice" },
+  { k: "corona", label: "Corona" },
+];
+
+/** Personaggio selezionato nel pannello Equip */
+let equipPgId = null;
+/** ID equipaggiato per slot (per «libera») */
+const equipSlotCurrentId = {};
+
 const COL_TAB_MAGAZZINO = 9;
 
 /** Righe messaggio tabella magazzino (testo unificato, niente duplicati sparsi). */
@@ -25,16 +38,15 @@ let catalogo = { set: [], main_stats: [], stats_subs: [] };
 let editingId = null;
 let editingAssigned = false;
 
-async function loadPersonaggiPerForm() {
-  const sel = document.getElementById("assegn_a_personaggio");
+async function populatePersonaggiSelect(sel, emptyLabel, emptyValue = "") {
   if (!sel) return;
   try {
     const r = await fetch(`${API}/personaggi`);
     const list = await r.json();
     sel.replaceChildren();
     const o0 = document.createElement("option");
-    o0.value = "";
-    o0.textContent = "— Solo magazzino (libero) —";
+    o0.value = emptyValue;
+    o0.textContent = emptyLabel;
     sel.appendChild(o0);
     for (const p of Array.isArray(list) ? list : []) {
       const o = document.createElement("option");
@@ -43,8 +55,251 @@ async function loadPersonaggiPerForm() {
       sel.appendChild(o);
     }
   } catch (e) {
-    console.warn("Lista personaggi (form manufatti):", e);
+    console.warn("Lista personaggi:", e);
   }
+}
+
+async function loadPersonaggiPerForm() {
+  await populatePersonaggiSelect(
+    document.getElementById("assegn_a_personaggio"),
+    "— Solo magazzino (libero) —",
+    ""
+  );
+}
+
+async function loadEquipPersonaggiSelect() {
+  await populatePersonaggiSelect(
+    document.getElementById("equipPersonaggio"),
+    "— Scegli personaggio —",
+    ""
+  );
+}
+
+function buildEquipGridHtml() {
+  const grid = document.getElementById("equipSlotsGrid");
+  if (!grid || grid.dataset.built === "1") return;
+  grid.dataset.built = "1";
+  grid.replaceChildren();
+  for (const { k, label } of EQUIP_SLOTS) {
+    const art = document.createElement("article");
+    art.className = "equip-slot-card";
+    art.dataset.slot = k;
+    art.innerHTML = `
+      <h3 class="equip-slot-title">${label}</h3>
+      <div class="equip-slot-current" id="equipCur_${k}"><span class="equip-empty">—</span></div>
+      <label class="equip-pick-label" for="equipPick_${k}">Sostituisci con</label>
+      <select id="equipPick_${k}" class="equip-pick-select inv-set-select" aria-label="Pezzo per slot ${label}"></select>
+      <button type="button" class="btn btn-primary equip-apply-btn" data-equip-slot="${k}">Applica slot</button>
+    `;
+    grid.appendChild(art);
+  }
+}
+
+function formatEquipCurrentSummary(info) {
+  if (!info || info.id == null || info.id === "") {
+    return '<span class="equip-empty">Slot vuoto (magazzino)</span>';
+  }
+  const set = escapeHtml(info.set || "—");
+  const nome = info.nome ? escapeHtml(String(info.nome)) : "";
+  const mainLine = [info.main_stat, info.main_val != null && info.main_val !== "" ? info.main_val : ""]
+    .filter(Boolean)
+    .join(" ");
+  const mainEsc = escapeHtml(mainLine || "—");
+  const lv = info.livello != null && info.livello !== "" ? escapeHtml(info.livello) : "—";
+  const st = info.stelle != null && info.stelle !== "" ? escapeHtml(info.stelle) : "—";
+  return (
+    `<div class="equip-cur-inner">` +
+    `<strong class="equip-cur-set">${set}</strong>` +
+    (nome ? `<span>${nome}</span>` : "") +
+    `<span class="equip-cur-main">${mainEsc}</span>` +
+    `<span class="equip-cur-id">#${escapeHtml(info.id)} · Lv.${lv} ★${st}</span>` +
+    `</div>`
+  );
+}
+
+async function populateEquipPickSelect(slot, personaggioId, currentInfo) {
+  const sel = document.getElementById(`equipPick_${slot}`);
+  if (!sel) return;
+  sel.replaceChildren();
+  const oKeep = document.createElement("option");
+  oKeep.value = "__keep__";
+  oKeep.textContent = "— Nessun cambio —";
+  sel.appendChild(oKeep);
+  if (currentInfo && currentInfo.id != null && currentInfo.id !== "") {
+    const oClear = document.createElement("option");
+    oClear.value = "__clear__";
+    oClear.textContent = "Libera slot (magazzino)";
+    sel.appendChild(oClear);
+  }
+  try {
+    const r = await fetch(
+      `${API}/artefatti/per-equip?slot=${encodeURIComponent(slot)}&personaggio_id=${encodeURIComponent(String(personaggioId))}`
+    );
+    let opts = [];
+    try {
+      opts = await r.json();
+    } catch {
+      opts = [];
+    }
+    if (!Array.isArray(opts)) opts = [];
+    const seen = new Set();
+    for (const op of opts) {
+      if (!op || op.id == null) continue;
+      const idn = Number(op.id);
+      if (seen.has(idn)) continue;
+      seen.add(idn);
+      const o = document.createElement("option");
+      o.value = String(op.id);
+      o.textContent =
+        op.label || `#${op.id} ${op.set || ""} ${op.main_stat || ""}`.trim() || `#${op.id}`;
+      sel.appendChild(o);
+    }
+  } catch (e) {
+    console.warn("per-equip", slot, e);
+  }
+}
+
+async function refreshEquipPanel() {
+  const selPg = document.getElementById("equipPersonaggio");
+  const raw = selPg && selPg.value ? String(selPg.value).trim() : "";
+  const pgId = raw ? parseInt(raw, 10) : NaN;
+  equipPgId = Number.isFinite(pgId) ? pgId : null;
+
+  for (const { k } of EQUIP_SLOTS) {
+    equipSlotCurrentId[k] = null;
+    const curEl = document.getElementById(`equipCur_${k}`);
+    const pickEl = document.getElementById(`equipPick_${k}`);
+    if (curEl) curEl.innerHTML = '<span class="equip-empty">—</span>';
+    if (pickEl) {
+      pickEl.replaceChildren();
+      const ph = document.createElement("option");
+      ph.value = "__keep__";
+      ph.textContent = equipPgId ? "— Caricamento… —" : "— Scegli personaggio —";
+      pickEl.appendChild(ph);
+    }
+  }
+
+  if (!equipPgId) return;
+
+  let d;
+  try {
+    const r = await fetch(`${API}/personaggio/${equipPgId}`);
+    if (!r.ok) throw new Error("personaggio");
+    d = await r.json();
+  } catch (e) {
+    console.warn("refreshEquipPanel", e);
+    return;
+  }
+
+  for (const { k } of EQUIP_SLOTS) {
+    const info = d.artefatti && d.artefatti[k];
+    const curEl = document.getElementById(`equipCur_${k}`);
+    if (curEl) curEl.innerHTML = formatEquipCurrentSummary(info);
+    equipSlotCurrentId[k] = info && info.id != null && info.id !== "" ? Number(info.id) : null;
+    await populateEquipPickSelect(k, equipPgId, info);
+  }
+}
+
+async function applyEquipSlot(slot) {
+  const pickEl = document.getElementById(`equipPick_${slot}`);
+  if (!pickEl) return;
+  const v = pickEl.value;
+  if (v === "__keep__") {
+    alert("Scegli un pezzo dal menu oppure «Libera slot».");
+    return;
+  }
+  if (!equipPgId) {
+    alert("Scegli un personaggio.");
+    return;
+  }
+  try {
+    if (v === "__clear__") {
+      const cur = equipSlotCurrentId[slot];
+      if (!cur) return;
+      const r = await fetch(`${API}/artefatti/${cur}/utilizzatore`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ personaggio_id: null }),
+      });
+      let res = {};
+      try {
+        res = await r.json();
+      } catch {
+        /* ignore */
+      }
+      if (!r.ok || res.error) {
+        alert("Errore: " + (res.error || r.status));
+        return;
+      }
+    } else {
+      const aid = parseInt(v, 10);
+      if (!aid) return;
+      const r = await fetch(`${API}/artefatti/${aid}/utilizzatore`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ personaggio_id: equipPgId }),
+      });
+      let res = {};
+      try {
+        res = await r.json();
+      } catch {
+        /* ignore */
+      }
+      if (!r.ok || res.error) {
+        alert("Errore: " + (res.error || r.status));
+        return;
+      }
+    }
+    await loadMagazzino();
+    await refreshEquipPanel();
+  } catch (e) {
+    alert("Errore: " + (e && e.message ? e.message : e));
+  }
+}
+
+function maybeRefreshEquipIfVisible() {
+  const pe = document.getElementById("invPanelEquip");
+  if (pe && !pe.hidden) void refreshEquipPanel();
+}
+
+function wireInvTabs() {
+  const ta = document.getElementById("invTabArchivio");
+  const te = document.getElementById("invTabEquip");
+  const pa = document.getElementById("invPanelArchivio");
+  const pe = document.getElementById("invPanelEquip");
+  if (!ta || !te || !pa || !pe) return;
+
+  function focusTab(activeBtn, otherBtn) {
+    activeBtn.classList.add("is-active");
+    otherBtn.classList.remove("is-active");
+    activeBtn.setAttribute("aria-selected", "true");
+    otherBtn.setAttribute("aria-selected", "false");
+    activeBtn.setAttribute("tabindex", "0");
+    otherBtn.setAttribute("tabindex", "-1");
+  }
+
+  ta.addEventListener("click", () => {
+    focusTab(ta, te);
+    pa.hidden = false;
+    pe.hidden = true;
+  });
+  te.addEventListener("click", () => {
+    focusTab(te, ta);
+    pa.hidden = true;
+    pe.hidden = false;
+    void refreshEquipPanel();
+  });
+}
+
+function wireEquipPanel() {
+  document.getElementById("equipPersonaggio")?.addEventListener("change", () => void refreshEquipPanel());
+  document.getElementById("btnEquipRefresh")?.addEventListener("click", () => void refreshEquipPanel());
+  document.getElementById("equipSlotsGrid")?.addEventListener("click", e => {
+    const btn = e.target.closest(".equip-apply-btn");
+    if (!btn) return;
+    const slot = btn.getAttribute("data-equip-slot");
+    if (slot) void applyEquipSlot(slot);
+  });
 }
 
 function appOpenHint() {
@@ -632,6 +887,7 @@ async function eliminaManufatto(aid) {
   if (editingId === aid) resetForm();
   modalInfoClose();
   await loadMagazzino();
+  maybeRefreshEquipIfVisible();
 }
 
 function collectFormPayload() {
@@ -689,6 +945,7 @@ async function salvaModuloManufatto() {
     }
     resetForm();
     await loadMagazzino();
+    maybeRefreshEquipIfVisible();
     return;
   }
 
@@ -712,6 +969,7 @@ async function salvaModuloManufatto() {
   }
   alert(rawPid ? "Manufatto aggiunto ed equipaggiato al personaggio scelto." : "Manufatto aggiunto al magazzino (libero).");
   await loadMagazzino();
+  maybeRefreshEquipIfVisible();
 }
 
 document.getElementById("slot").addEventListener("change", () => loadCatalogo(document.getElementById("slot").value));
@@ -794,9 +1052,16 @@ function wireFiltriToggle() {
 }
 
 async function initArtefattiPage() {
+  buildEquipGridHtml();
+  wireInvTabs();
+  wireEquipPanel();
   wireFiltriMagazzino();
   wireFiltriToggle();
-  await Promise.all([loadPersonaggiPerForm(), loadCatalogo("fiore")]);
+  await Promise.all([loadPersonaggiPerForm(), loadEquipPersonaggiSelect(), loadCatalogo("fiore")]);
   await loadMagazzino();
+  if (location.hash === "#equip") {
+    document.getElementById("invTabEquip")?.click();
+    history.replaceState(null, "", location.pathname + location.search);
+  }
 }
 initArtefattiPage();

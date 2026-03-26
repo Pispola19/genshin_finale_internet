@@ -79,6 +79,57 @@ class ManualImportStressTest(unittest.TestCase):
         self.assertEqual(fc["c1"], "0")
         self.assertEqual(ft["aa"], "-")
 
+    def test_garbage_before_after_json(self):
+        inner = {"name": "Yelan", "level": 90, "fightPropMap": {"1": 15000, "2": 2000}}
+        raw = "=== log ===\n" + json.dumps(inner) + "\n--- fine ---"
+        p = parse_pasted_payload(raw)
+        self.assertEqual(p["character"]["nome"], "Yelan")
+        self.assertEqual(p["character"]["hp_flat"], 15000)
+
+    def test_trailing_commas(self):
+        raw = '{"name":"Sayu","level":70,"fightPropMap":{"1":100,},}'
+        p = parse_pasted_payload(raw)
+        self.assertEqual(p["character"]["nome"], "Sayu")
+        self.assertEqual(p["character"]["hp_flat"], 100)
+
+    def test_markdown_fence(self):
+        inner = {"name": "Zhongli", "expLevel": 80}
+        raw = "Ecco i dati:\n```json\n" + json.dumps(inner) + "\n```\ngrazie"
+        p = parse_pasted_payload(raw)
+        self.assertEqual(p["character"]["nome"], "Zhongli")
+        self.assertEqual(p["character"]["livello"], 80)
+
+    def test_xssi_prefix(self):
+        inner = {"name": "Klee", "level": 50}
+        raw = ")]}'\n" + json.dumps(inner)
+        p = parse_pasted_payload(raw)
+        self.assertEqual(p["character"]["nome"], "Klee")
+
+    def test_typographic_quotes(self):
+        # U+201C / U+201D attorno alla chiave name (dopo normalizzazione deve parsare)
+        raw = "{\u201cname\u201d: \u201cFischl\u201d, \u201clevel\u201d: 60}"
+        p = parse_pasted_payload(raw)
+        self.assertEqual(p["character"]["nome"], "Fischl")
+
+    def test_name_only_minimal(self):
+        raw = json.dumps({"name": "Collei"})
+        p = parse_pasted_payload(raw)
+        self.assertEqual(p["character"]["nome"], "Collei")
+        self.assertEqual(p["character"]["livello"], 1)
+
+    def test_fight_prop_comma_thousands(self):
+        raw = json.dumps({"name": "X", "level": 90, "fightPropMap": {"1": "18,500", "2": "1.250,5"}})
+        p = parse_pasted_payload(raw)
+        self.assertEqual(p["character"]["hp_flat"], 18500)
+        self.assertEqual(p["character"]["atk_flat"], 1250)
+
+    def test_double_json_string(self):
+        inner = json.dumps({"name": "Yae", "fightPropMap": {"1": 100}})
+        outer = json.dumps(inner)
+        p = parse_pasted_payload(outer)
+        self.assertEqual(p["character"]["nome"], "Yae")
+        self.assertEqual(p["character"]["hp_flat"], 100)
+
 
 if __name__ == "__main__":
     unittest.main()

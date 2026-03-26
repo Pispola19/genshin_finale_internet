@@ -13,9 +13,12 @@
       <a href="personaggio.html">Personaggio</a>
       <a href="artefatti.html">Manufatti</a>
       <a href="build.html" class="active">Build Analysis</a>
+      <a href="rotation.html">Rotazione</a>
       <a href="team.html">Team Builder</a>
       <a href="dashboard.html">Dashboard</a>
+      <a href="personaggio.html#import" class="nav-import">Import</a>
       <a href="istruzioni.html">Come si usa</a>
+      <a href="login.html" class="nav-login">Accedi</a>
       <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
     </div>
   </nav>
@@ -42,24 +45,69 @@
       <div class="build-compare">
         <div class="build-box">
           <h3>BUILD ATTUALE</h3>
-          <div class="stat-row">ATK: <span id="curr_atk">—</span></div>
+          <div class="build-pre-dps">
+            <h4 class="build-subh">Bonus set</h4>
+            <ul id="curr_bonus_set" class="build-bonus-list" aria-label="Conteggio e bonus di set"></ul>
+            <h4 class="build-subh">Riepilogo build</h4>
+            <ul id="curr_riepilogo_slots" class="build-slot-list" aria-label="Pezzi equipaggiati per slot"></ul>
+          </div>
+          <div class="stat-row">ATK (da manufatti): <span id="curr_atk">—</span></div>
           <div class="stat-row">CR/CD: <span id="curr_crcd">—</span></div>
-          <div class="stat-row">ER: <span id="curr_er">—</span></div>
-          <div class="stat-row">DPS: <span id="curr_dps">—</span></div>
+          <div class="stat-row">ER / EM: <span id="curr_er_em">—</span></div>
+          <div class="stat-row">DPS (score×10): <span id="curr_dps">—</span></div>
+          <div class="stat-row">Proxy danno: <span id="curr_damage_proxy">—</span></div>
         </div>
         <div class="build-box">
           <h3>BUILD OTTIMALE</h3>
-          <div class="stat-row">ATK: <span id="opt_atk">—</span></div>
+          <div class="build-pre-dps">
+            <h4 class="build-subh">Bonus set</h4>
+            <ul id="opt_bonus_set" class="build-bonus-list" aria-label="Conteggio e bonus di set ottimali"></ul>
+            <h4 class="build-subh">Riepilogo build</h4>
+            <ul id="opt_riepilogo_slots" class="build-slot-list" aria-label="Pezzi ottimali per slot"></ul>
+          </div>
+          <div class="stat-row">ATK (da manufatti): <span id="opt_atk">—</span></div>
           <div class="stat-row">CR/CD: <span id="opt_crcd">—</span></div>
-          <div class="stat-row">ER: <span id="opt_er">—</span></div>
-          <div class="stat-row">DPS: <span id="opt_dps">—</span></div>
+          <div class="stat-row">ER / EM: <span id="opt_er_em">—</span></div>
+          <div class="stat-row">DPS (score×10): <span id="opt_dps">—</span></div>
+          <div class="stat-row">Proxy danno: <span id="opt_damage_proxy">—</span></div>
         </div>
       </div>
 
+      <p class="page-hint" id="buildModelHint" style="font-size:0.88rem;color:var(--text-muted);max-width:52rem"></p>
+
+      <div class="build-box build-compare-detail" style="margin-top:1rem">
+        <h3>Confronto slot</h3>
+        <p class="build-compare-legend" aria-hidden="false">
+          <span><span class="build-ux-ico build-ux-ico-same">✓</span>Uguale</span>
+          <span><span class="build-ux-ico build-ux-ico-change">⇄</span>Da cambiare</span>
+          <span><span class="build-ux-ico build-ux-ico-empty">○</span>Vuoto</span>
+        </p>
+        <p class="build-compare-lead" id="buildSlotChangeLead">Calcola la build per vedere quali slot cambiano.</p>
+        <div class="build-slot-diff-wrap">
+          <table class="build-slot-diff-table" aria-label="Stato slot attuale vs ottimale">
+            <thead>
+              <tr>
+                <th>Slot</th>
+                <th>Stato</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody id="buildSlotDiffBody"></tbody>
+          </table>
+        </div>
+        <h4 class="build-subh" style="margin-top:1rem">Impatto set sul proxy</h4>
+        <p class="build-set-impact-summary" id="buildSetImpactSummary"></p>
+        <ul id="buildSetImpactLines" class="build-set-impact-list" aria-label="Dettaglio bonus set proxy"></ul>
+      </div>
+
       <div class="build-box" style="margin-top:1rem">
-        <h3>DIFFERENZA</h3>
+        <h3>DIFFERENZA (manufatti + proxy)</h3>
         <div class="stat-row">+ DPS: <span id="diff_dps" class="positive">—</span></div>
+        <div class="stat-row">+ Proxy danno: <span id="diff_damage_proxy" class="positive">—</span></div>
+        <div class="stat-row">Δ moltiplicatore set (proxy): <span id="diff_set_mult">—</span></div>
+        <div class="stat-row">Δ ATK (manufatti): <span id="diff_atk">—</span></div>
         <div class="stat-row">+ CR/CD: <span id="diff_crcd">—</span></div>
+        <div class="stat-row">Δ ER / EM (manufatti): <span id="diff_er_em">—</span></div>
       </div>
     </div>
 
@@ -82,6 +130,7 @@
     </div>
   </main>
 
+  <script src="js/session-fetch.js"></script>
   <script src="js/build.js"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="api-base" content="/api">
-  <title>Manufatti — Magazzino — Genshin Manager</title>
+  <title>Manufatti — Archivio &amp; Equip — Genshin Manager</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="page-bg page-bg-personaggio">
@@ -13,9 +13,12 @@
       <a href="personaggio.html">Personaggio</a>
       <a href="artefatti.html" class="active">Manufatti</a>
       <a href="build.html">Build Analysis</a>
+      <a href="rotation.html">Rotazione</a>
       <a href="team.html">Team Builder</a>
       <a href="dashboard.html">Dashboard</a>
+      <a href="personaggio.html#import" class="nav-import">Import</a>
       <a href="istruzioni.html">Come si usa</a>
+      <a href="login.html" class="nav-login">Accedi</a>
       <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
     </div>
   </nav>
@@ -25,14 +28,28 @@
     <a class="app-notice-link" href="istruzioni.html#dps-e-manufatti">Come si usa</a>
   </aside>
 
-  <main>
-    <div class="section">
-      <h2>Magazzino manufatti</h2>
-      <p class="page-hint page-hint-oneline">Registri e modifichi i pezzi qui; assegnazione nel riquadro blu; scheda <a href="personaggio.html">Personaggio</a> = solo lettura equip.</p>
+  <main class="inv-page">
+    <header class="inv-hero section">
+      <h1 class="inv-hero-title">Inventario manufatti</h1>
+      <p class="inv-hero-lead page-hint" style="max-width: 46rem; margin-top: 0.35rem;">
+        <strong>Archivio</strong> — crei e modifichi ogni pezzo (set, main, sub, livello). <strong>Equip</strong> — assegni i cinque slot al personaggio senza passare dal modulo lungo: solo scelte rapide dal magazzino.
+        La scheda <a href="personaggio.html">Personaggio</a> mostra l’equip in <strong>sola lettura</strong>.
+      </p>
+    </header>
+
+    <div class="inv-tablist" role="tablist" aria-label="Sezioni inventario">
+      <button type="button" class="inv-tab is-active" role="tab" id="invTabArchivio" aria-selected="true" aria-controls="invPanelArchivio">Archivio</button>
+      <button type="button" class="inv-tab" role="tab" id="invTabEquip" aria-selected="false" aria-controls="invPanelEquip" tabindex="-1">Equip personaggio</button>
+    </div>
+
+    <div id="invPanelArchivio" class="inv-panel" role="tabpanel" aria-labelledby="invTabArchivio">
+    <div class="section inv-archivio-intro">
+      <h2 class="inv-section-kicker">Archivio</h2>
+      <p class="page-hint page-hint-oneline">Qui il <strong>database</strong> dei pezzi: aggiungi, modifica dalla tabella, filtri. L’assegnazione “da modulo” resta nel riquadro blu sotto; per solo-slot usa la tab <strong>Equip</strong>.</p>
     </div>
 
     <div class="section inv-add-form" id="section-form-manufatto">
-      <h2>➕ Aggiungi o modifica manufatto</h2>
+      <h2>➕ Registra o modifica pezzo</h2>
       <p id="formModuloBanner" class="page-hint" hidden style="margin-bottom:0.75rem">Stai modificando il manufatto <strong>#<span id="formModuloId"></span></strong>. Salva per applicare, <strong>Annulla</strong> per tornare a nuovo pezzo.</p>
       <p style="color:var(--text-muted);margin-bottom:1rem;font-size:0.92rem">Pezzo sopra, assegnazione nel riquadro blu. <strong>AGGIUNGI</strong> / riga → <strong>Carica nel modulo</strong> → <strong>SALVA MODIFICHE</strong>.</p>
       <p id="slotLockedHint" class="page-hint" hidden style="margin-bottom:0.75rem">Questo pezzo è <strong>equipaggiato</strong>: non puoi cambiare <em>slot</em> finché è su un personaggio. Per liberarlo, nel riquadro sotto scegli <strong>Solo magazzino (libero)</strong> e salva; poi potrai cambiare slot se serve.</p>
@@ -121,8 +138,8 @@
     </div>
 
     <div class="section">
-      <h2>Tutti i pezzi</h2>
-      <p class="page-hint" style="margin:0 0 0.45rem;font-size:0.86rem">Riga → <strong>Carica nel modulo</strong>; resto riga → suggerimenti. Filtri: <a href="istruzioni.html#filtri-inventario-manufatti">spiegazione in Come si usa</a>.</p>
+      <h2>Catalogo archivio</h2>
+      <p class="page-hint" style="margin:0 0 0.45rem;font-size:0.86rem">Riga → <strong>Carica nel modulo</strong>; resto riga → suggerimenti. Filtri: <a href="istruzioni.html#filtri-inventario-manufatti">Come si usa</a>.</p>
       <div class="magazzino-filtri-wrap">
         <button type="button" class="btn btn-secondary btn-filtri-toggle" id="btnToggleFiltriMagazzino" aria-expanded="false" aria-controls="magazzinoFiltriPanel">Mostra filtri inventario</button>
         <div id="magazzinoFiltriPanel" class="magazzino-filtri magazzino-filtri-panel" hidden>
@@ -180,6 +197,22 @@
         </table>
       </div>
     </div>
+    </div>
+
+    <div id="invPanelEquip" class="inv-panel" role="tabpanel" aria-labelledby="invTabEquip" hidden>
+      <div class="section equip-intro">
+        <h2 class="inv-section-kicker">Equip</h2>
+        <p class="page-hint" style="max-width: 44rem;">Personaggio salvato → per ogni slot (Fiore … Corona) vedi cosa c’è ora e scegli un pezzo <strong>libero</strong> dello stesso tipo o <strong>libera slot</strong>. I pezzi nuovi si creano in <strong>Archivio</strong>.</p>
+        <div class="equip-toolbar">
+          <div class="form-group form-group-stack equip-pg-field">
+            <label for="equipPersonaggio">Personaggio</label>
+            <select id="equipPersonaggio" class="inv-set-select"></select>
+          </div>
+          <button type="button" class="btn btn-secondary" id="btnEquipRefresh">Aggiorna vista</button>
+        </div>
+      </div>
+      <div class="equip-slots-grid" id="equipSlotsGrid" aria-live="polite"></div>
+    </div>
   </main>
 
   <div id="modalInfoBackdrop" class="modal-backdrop" hidden>
@@ -190,10 +223,11 @@
       <h4 class="modal-subtitle">A chi conviene di più (indicativo)</h4>
       <p id="modalInfoMessaggio" class="page-hint modal-hint"></p>
       <ul id="modalInfoRanking" class="modal-ranking"></ul>
-      <p class="page-hint modal-footer-hint">Assegnazione solo dal modulo Manufatti. <strong>DPS Build</strong> = manufatti equipaggiati, non le stat foglio Personaggio.</p>
+      <p class="page-hint modal-footer-hint">Equip: tab <strong>Equip</strong> o modulo <strong>Archivio</strong>. <strong>DPS Build</strong> = manufatti equipaggiati, non le stat foglio Personaggio.</p>
     </div>
   </div>
 
+  <script src="js/session-fetch.js"></script>
   <script src="js/artefatti.js"></script>
 </body>
 </html>

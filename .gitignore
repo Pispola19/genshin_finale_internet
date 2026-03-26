@@ -6,5 +6,7 @@ logs/
 # Database locale (non versionare dati utente)
 *.db
 user_artifact_sets.json
-# Log avvio locale (launchd)
-mac/*.log
+# Snapshot automatici (checkpoint DB)
+checkpoints/
+# Stato form GUI (ripristino dopo chiusura)
+checkpoint.json

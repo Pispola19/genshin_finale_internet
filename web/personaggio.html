@@ -13,9 +13,12 @@
       <a href="personaggio.html" class="active">Personaggio</a>
       <a href="artefatti.html">Manufatti</a>
       <a href="build.html">Build Analysis</a>
+      <a href="rotation.html">Rotazione</a>
       <a href="team.html">Team Builder</a>
       <a href="dashboard.html">Dashboard</a>
+      <a href="#import" class="nav-import" id="navImportLink">Import</a>
       <a href="istruzioni.html">Come si usa</a>
+      <a href="login.html" class="nav-login">Accedi</a>
       <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
     </div>
   </nav>
@@ -151,14 +154,45 @@
       </div>
 
       <div class="btn-group">
-        <button class="btn btn-primary" id="btnNuovo">NUOVO</button>
-        <button class="btn btn-primary" id="btnSalva">SALVA</button>
-        <button class="btn btn-secondary" id="btnCancella">CANCELLA</button>
+        <button type="button" class="btn btn-primary" id="btnNuovo">NUOVO</button>
+        <button type="button" class="btn btn-secondary" id="btnModifica">MODIFICA</button>
+        <button type="button" class="btn btn-primary" id="btnSalva">SALVA</button>
+        <button type="button" class="btn btn-secondary" id="btnCancella">CANCELLA</button>
       </div>
     </main>
 
   </div>
 
+  <div id="importBackdrop" class="modal-backdrop" hidden>
+    <div class="modal-panel modal-panel-import" role="dialog" aria-labelledby="importTitle">
+      <button type="button" class="modal-close" id="importClose" aria-label="Chiudi">&times;</button>
+      <h2 id="importTitle">Import da copia (JSON)</h2>
+      <p class="modal-hint">Incolla la risposta JSON da DevTools (Rete) o il formato descritto nella documentazione. Nessun login HoYoLAB.</p>
+      <label class="import-label" for="importRaw">JSON / testo</label>
+      <textarea id="importRaw" class="import-textarea" rows="12" spellcheck="false" placeholder='Incolla qui…'></textarea>
+      <div class="form-group import-choice-wrap" id="importChoiceWrap" hidden>
+        <label for="importChoiceNome">Personaggio nel JSON (più di uno)</label>
+        <select id="importChoiceNome"></select>
+      </div>
+      <pre id="importPreview" class="import-preview" hidden></pre>
+      <div class="btn-group import-modal-actions">
+        <button type="button" class="btn btn-secondary" id="importPreviewBtn">Anteprima</button>
+        <button type="button" class="btn btn-primary" id="importNewBtn">Importa come nuovo</button>
+        <button type="button" class="btn btn-primary" id="importUpdateBtn">Aggiorna scheda corrente</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="listaPgBackdrop" class="modal-backdrop" hidden>
+    <div class="modal-panel modal-panel-import" role="dialog" aria-labelledby="listaPgTitle">
+      <button type="button" class="modal-close" id="listaPgClose" aria-label="Chiudi">&times;</button>
+      <h2 id="listaPgTitle">Modifica personaggio</h2>
+      <p class="modal-hint">Scegli un personaggio salvato per caricarlo nel modulo.</p>
+      <ul id="listaPgUl" class="lista-pg-modifica"></ul>
+    </div>
+  </div>
+
+  <script src="js/session-fetch.js"></script>
   <script src="js/personaggio.js"></script>
 </body>
 </html>

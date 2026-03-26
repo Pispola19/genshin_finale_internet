@@ -4,7 +4,8 @@ Tutte le chiamate ai Repository per artefatti passano da qui.
 """
 from typing import Optional, List, Tuple, Dict, Any
 
-from core.dps import DpsCalculator
+from core.dps import DpsCalculator, build_dps_result_artefatto_index
+from core.dps_types import DpsResult, dps_result_to_message_it
 from db.connection import get_connection, get_artefatti_connection
 from db.repositories import ArtefattoRepository, PersonaggioRepository
 from db.artifact_catalog import (
@@ -60,19 +61,25 @@ class ArtefattoService:
         txt = f"#{art['id']} {art.get('set_nome', '')} {art.get('main_stat', '')}"
         return txt[:max_len] if len(txt) > max_len else txt
 
-    def formato_messaggio_dps(self, artefatto_id: int, max_righe: int = 5) -> str:
-        """Messaggio DPS pronto per messagebox."""
+    def dps_result_artefatto(self, artefatto_id: int) -> Optional[DpsResult]:
+        """Risultato strutturato DPS/indice per un manufatto (per GUI o API)."""
         art = ArtefattoRepository.get(self._art_conn(), artefatto_id)
         if not art:
-            return "Artefatto non trovato."
+            return None
         personaggi = []
         for r in PersonaggioRepository.lista(self._main_conn()):
             pg = PersonaggioRepository.get(self._main_conn(), r[0])
             if pg:
                 personaggi.append(pg)
-        risultati = DpsCalculator.ordina_per_miglior_personaggio(art, personaggi)
-        righe = [f"  {nome}: {score}" for _, nome, score in risultati[:max_righe]]
-        return "Migliore per:\n" + "\n".join(righe) if righe else "Nessun personaggio."
+        label = self.formato_label_artefatto(artefatto_id, max_len=200)
+        return build_dps_result_artefatto_index(art, personaggi, artifact_label=label or None)
+
+    def formato_messaggio_dps(self, artefatto_id: int, max_righe: int = 5) -> str:
+        """Messaggio DPS compatto (retrocompatibilità)."""
+        res = self.dps_result_artefatto(artefatto_id)
+        if not res:
+            return "Artefatto non trovato."
+        return dps_result_to_message_it(res, max_ranking=max_righe)
 
     # --- Operazioni ---
     def get_artefatto(self, artefatto_id: int) -> Optional[dict]:
@@ -208,20 +215,26 @@ class ArtefattoService:
                 "ranking": [],
                 "messaggio": "Salva i personaggi dalla pagina Personaggio: qui comparirà un ordine indicativo di chi trae più vantaggio da questo pezzo.",
             }
-        risultati = DpsCalculator.ordina_per_miglior_personaggio(art, personaggi)
         ranking = []
-        for pid, nome, score in risultati:
-            pg = PersonaggioRepository.get(self._main_conn(), pid)
-            ranking.append({
-                "personaggio_id": pid,
-                "nome": nome,
-                "elemento": pg.elemento if pg else "",
-                "score": score,
-            })
+        for pg in personaggi:
+            sc, fattori = DpsCalculator.score_artefatto_per_personaggio(art, pg)
+            ranking.append(
+                {
+                    "personaggio_id": pg.id,
+                    "nome": pg.nome,
+                    "elemento": pg.elemento,
+                    "score": sc,
+                    "fattori": fattori,
+                }
+            )
+        ranking.sort(key=lambda x: -float(x["score"]))
         return {
             "artefatto_id": artefatto_id,
             "ranking": ranking,
-            "messaggio": "Punteggio indicativo (main + sub e bonus elemento sul calice). Per assegnare il pezzo: pagina Manufatti, modulo Assegnazione.",
+            "messaggio": (
+                "Punteggio indicativo: main/sub, DMG% elemento su tutto il pezzo, EM pesato per elemento, "
+                "aggiustamento se CR foglio+pezzo supera ~78%. Assegnazione: Manufatti → modulo Assegnazione."
+            ),
         }
 
     def aggiorna_artefatto(self, artefatto_id: int, form_values: dict) -> None:

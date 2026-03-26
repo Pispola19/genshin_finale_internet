@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="api-base" content="/api">
+  <title>Accedi — Genshin Manager</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page-bg page-bg-personaggio">
+  <nav class="app-nav" aria-label="Navigazione principale">
+    <div class="nav-pages">
+      <a href="personaggio.html">Personaggio</a>
+      <a href="artefatti.html">Manufatti</a>
+      <a href="build.html">Build Analysis</a>
+      <a href="rotation.html">Rotazione</a>
+      <a href="team.html">Team Builder</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="personaggio.html#import" class="nav-import">Import</a>
+      <a href="istruzioni.html">Come si usa</a>
+      <a href="login.html" class="nav-login active">Accedi</a>
+      <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
+    </div>
+  </nav>
+
+  <div class="page-personaggio">
+    <main class="personaggio-main section" style="max-width: 28rem; margin: 2rem auto;">
+      <h1 style="margin-bottom: 0.5rem;">Accesso modifiche</h1>
+      <p id="authHint" class="page-hint" style="margin-bottom: 1.25rem;"></p>
+      <form id="loginForm" class="section" style="padding: 1.25rem;">
+        <div class="form-group">
+          <label for="webPassword">Password web</label>
+          <input type="password" id="webPassword" name="password" autocomplete="current-password" required style="width:100%;max-width:100%">
+        </div>
+        <div class="btn-group" style="margin-top: 1rem;">
+          <button type="submit" class="btn btn-primary" id="btnLogin">Entra</button>
+          <button type="button" class="btn btn-secondary" id="btnLogout">Esci</button>
+        </div>
+        <p id="loginError" class="page-hint" style="color: var(--danger); margin-top: 0.75rem; display: none;"></p>
+      </form>
+      <p class="page-hint" style="margin-top: 1rem;">
+        <a href="personaggio.html">← Torna alla scheda personaggio</a>
+      </p>
+    </main>
+  </div>
+
+  <script src="js/session-fetch.js"></script>
+  <script>
+(function () {
+  const API = (document.querySelector('meta[name="api-base"]') || {}).content || "/api";
+  const hint = document.getElementById("authHint");
+  const errEl = document.getElementById("loginError");
+  const form = document.getElementById("loginForm");
+  const params = new URLSearchParams(location.search);
+
+  function safeNext(u) {
+    if (!u || typeof u !== "string") return "/personaggio.html";
+    if (!u.startsWith("/") || u.startsWith("//")) return "/personaggio.html";
+    if (u.length > 512) return "/personaggio.html";
+    return u;
+  }
+  const nextUrl = safeNext(params.get("next"));
+
+  async function refreshStatus() {
+    hint.replaceChildren();
+    const r = await fetch(API.replace(/\/$/, "") + "/auth/status", { credentials: "same-origin" });
+    const d = await r.json();
+    if (!d.write_auth_required) {
+      const s1 = document.createElement("span");
+      s1.innerHTML = "Su questo server <strong>non è attiva</strong> la password per le modifiche: salva e import funzionano senza login. ";
+      const s2 = document.createElement("span");
+      s2.textContent = "Per proteggere i dati su Internet, imposta su Render la variabile GENSHIN_WEB_WRITE_PASSWORD (e SECRET_KEY per la sessione).";
+      hint.appendChild(s1);
+      hint.appendChild(s2);
+      form.style.display = "none";
+      return;
+    }
+    form.style.display = "block";
+    const base = document.createElement("span");
+    base.innerHTML =
+      "Inserisci la <strong>password web</strong> impostata sul server per <strong>salvare</strong>, <strong>importare JSON</strong> e <strong>modificare manufatti</strong>. " +
+      "La password resta solo tra browser e tuo server; non è nel codice JavaScript pubblico.";
+    hint.appendChild(base);
+    if (d.authenticated) {
+      const br = document.createElement("br");
+      const ok = document.createElement("span");
+      ok.textContent = "Sessione attiva. ";
+      const a = document.createElement("a");
+      a.href = nextUrl;
+      a.textContent = "Continua al sito";
+      hint.appendChild(br);
+      hint.appendChild(ok);
+      hint.appendChild(a);
+    }
+  }
+
+  refreshStatus().catch(function () {});
+
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    errEl.style.display = "none";
+    const password = document.getElementById("webPassword").value;
+    const r = await fetch(API.replace(/\/$/, "") + "/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ password: password }),
+    });
+    const data = await r.json().catch(function () { return {}; });
+    if (r.ok && data.ok) {
+      window.location.href = nextUrl;
+      return;
+    }
+    errEl.textContent = data.error || "Accesso non riuscito.";
+    errEl.style.display = "block";
+  });
+
+  document.getElementById("btnLogout").addEventListener("click", async function () {
+    await fetch(API.replace(/\/$/, "") + "/auth/logout", { method: "POST", credentials: "same-origin" });
+    window.location.reload();
+  });
+})();
+  </script>
+</body>
+</html>
