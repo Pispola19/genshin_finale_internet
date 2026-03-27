@@ -14,14 +14,8 @@ function renderVuoto() {
     el.classList.remove("filled");
   });
   document.getElementById("teamPower").textContent = "—";
-  document.getElementById("top5").innerHTML = "<li>—</li>";
-  document.getElementById("buildMigliorabili").innerHTML = "<li>—</li>";
-  const dq = document.getElementById("dashboardDpsQuality");
-  if (dq) {
-    dq.hidden = true;
-    dq.replaceChildren();
-    dq.className = "dashboard-dps-quality";
-  }
+  document.getElementById("top5").innerHTML = "<li>Nessun dato disponibile.</li>";
+  document.getElementById("buildMigliorabili").innerHTML = "<li>Nessun dato disponibile.</li>";
 }
 
 function render(dati) {
@@ -47,7 +41,7 @@ function render(dati) {
   const top5 = dati.top_5 || [];
   const top5El = document.getElementById("top5");
   if (top5.length === 0) {
-    top5El.innerHTML = "<li>—</li>";
+    top5El.innerHTML = "<li>Nessun personaggio disponibile.</li>";
   } else {
     top5El.innerHTML = top5.map((p, i) =>
       `<li>${i + 1}. ${p.nome} → DPS ${p.dps ?? "—"}</li>`
@@ -58,44 +52,12 @@ function render(dati) {
   const migliorabiliEl = document.getElementById("buildMigliorabili");
   if (migliorabili.length === 0) {
     migliorabiliEl.innerHTML = vuoto
-      ? "<li>—</li>"
-      : "<li>Nessuna build da migliorare</li>";
+      ? "<li>Nessun dato disponibile.</li>"
+      : "<li>Nessuna build da migliorare.</li>";
   } else {
     migliorabiliEl.innerHTML = migliorabili.map(p =>
       `<li>${p.nome} → attuale ${p.dps_attuale ?? "—"} vs ottimale ${p.dps_ottimale ?? "—"} (+${p.diff ?? 0})</li>`
     ).join("");
-  }
-
-  const dq = document.getElementById("dashboardDpsQuality");
-  const q = dati.dps_quality;
-  if (dq && q && typeof q === "object") {
-    dq.hidden = false;
-    const ready = Number(q.ready) || 0;
-    const partial = Number(q.partial) || 0;
-    dq.className = "dashboard-dps-quality";
-    dq.classList.add(
-      vuoto
-        ? "dashboard-dps-quality--neutral"
-        : partial > 0
-          ? "dashboard-dps-quality--warn"
-          : "dashboard-dps-quality--ok"
-    );
-    dq.replaceChildren();
-    const title = document.createElement("span");
-    title.className = "dashboard-dps-quality__title";
-    title.textContent = "Affidabilità DPS (tutte le schede)";
-    const line1 = document.createElement("div");
-    line1.className = "dashboard-dps-quality__stats";
-    line1.textContent = String(q.summary_it || "");
-    const line2 = document.createElement("div");
-    line2.className = "dashboard-dps-quality__stats";
-    line2.style.marginTop = "0.35rem";
-    line2.textContent = `Pronti: ${ready} · Non affidabili: ${partial}`;
-    dq.append(title, line1, line2);
-  } else if (dq) {
-    dq.hidden = true;
-    dq.replaceChildren();
-    dq.className = "dashboard-dps-quality";
   }
 }
 
@@ -115,7 +77,7 @@ async function carica() {
     if (errEl) {
       errEl.hidden = false;
       errEl.textContent =
-        "Impossibile caricare la dashboard (server non raggiungibile o errore). Avvia python3 run_web.py e premi AGGIORNA.";
+        "Impossibile caricare la dashboard. Controlla il server e premi AGGIORNA.";
     }
   }
 }

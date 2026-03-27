@@ -15,14 +15,23 @@
 
   async function loadPeople() {
     const r = await fetch(apiBase + "/teams");
-    if (!r.ok) throw new Error("Impossibile caricare l'elenco personaggi.");
+    if (!r.ok) throw new Error("Impossibile caricare i personaggi salvati.");
     const list = await r.json();
     sel.innerHTML = "";
+    const ph = document.createElement("option");
+    ph.value = "";
+    ph.textContent = "— Seleziona un personaggio per iniziare —";
+    sel.appendChild(ph);
     for (const p of list) {
       const o = document.createElement("option");
       o.value = String(p.id);
       o.textContent = (p.nome || "—") + " (lv " + (p.livello ?? "?") + ")";
       sel.appendChild(o);
+    }
+    if (!Array.isArray(list) || list.length === 0) {
+      showErr("Nessuna build disponibile. Salva un personaggio e assegna i manufatti.");
+    } else {
+      showErr("");
     }
   }
 
@@ -31,7 +40,7 @@
     outSec.hidden = true;
     const id = sel.value;
     if (!id) {
-      showErr("Nessun personaggio disponibile.");
+      showErr("Seleziona un personaggio per iniziare.");
       return;
     }
     const preset = (presetEl && presetEl.value) || "equilibrato";
@@ -41,7 +50,7 @@
         apiBase + "/build/" + encodeURIComponent(id) + "/rotation?preset=" + encodeURIComponent(preset)
       );
     } catch (e) {
-      showErr("Rete o server non raggiungibile.");
+      showErr("Server non raggiungibile. Riprova tra poco.");
       return;
     }
     const data = await r.json().catch(() => ({}));

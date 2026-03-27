@@ -3,8 +3,6 @@ Servizi applicativi - interfaccia unica tra GUI e database.
 La GUI parla SOLO con AppService. Nessun accesso diretto a Repository o DB.
 AppService delega a PersonaggioService, ArtefattoService, BuildService, TeamService.
 """
-from typing import Optional
-
 from core.personaggio_service import PersonaggioService
 from core.artefatto_service import ArtefattoService
 from core.build_service import BuildService
@@ -29,39 +27,11 @@ class AppService:
         self._personaggio.close()
 
     # --- Personaggio (delega a PersonaggioService) ---
-    def valida_nome(self, nome: str, escludi_id=None):
-        return self._personaggio.valida_nome(nome, escludi_id)
+    def valida_nome(self, nome: str, escludi_id=None, **kwargs):
+        return self._personaggio.valida_nome(nome, escludi_id, **kwargs)
 
     def id_per_nome(self, nome: str):
         return self._personaggio.id_per_nome(nome)
-
-    def replace_equipment_from_hoyo_relics(self, personaggio_id: int, relics: list):
-        self._personaggio.replace_equipment_from_hoyo_relics(personaggio_id, relics)
-
-    def apply_hoyo_relic_import(
-        self, personaggio_id: Optional[int], relics: list, import_mode: str
-    ) -> None:
-        """Modalità: replace | update | append_dedup | append_force."""
-        from core.hoyolab_import import (
-            IMPORT_MODE_APPEND_DEDUP,
-            IMPORT_MODE_APPEND_FORCE,
-            IMPORT_MODE_UPDATE,
-            normalize_import_mode,
-        )
-
-        m = normalize_import_mode(import_mode)
-        if m == IMPORT_MODE_APPEND_DEDUP:
-            self._personaggio.append_hoyo_relics_to_warehouse(relics, dedup=True)
-            return
-        if m == IMPORT_MODE_APPEND_FORCE:
-            self._personaggio.append_hoyo_relics_to_warehouse(relics, dedup=False)
-            return
-        if personaggio_id is None:
-            raise ValueError("Import manufatti: serve personaggio_id per modalità replace/update.")
-        if m == IMPORT_MODE_UPDATE:
-            self._personaggio.update_equipment_from_hoyo_relics(personaggio_id, relics)
-        else:
-            self._personaggio.replace_equipment_from_hoyo_relics(personaggio_id, relics)
 
     def carica_dati_completi(self, id_pg: int):
         return self._personaggio.carica_dati_completi(id_pg)
@@ -69,10 +39,24 @@ class AppService:
     def lista_personaggi_righe(self):
         return self._personaggio.lista_personaggi_righe()
 
-    def salva_completo(self, id_pg, form_personaggio, form_arma, form_costellazioni, form_talenti, form_equipaggiamento):
+    def salva_completo(
+        self,
+        id_pg,
+        form_personaggio,
+        form_arma,
+        form_costellazioni,
+        form_talenti,
+        form_equipaggiamento,
+        meta=None,
+    ):
         return self._personaggio.salva_completo(
-            id_pg, form_personaggio, form_arma,
-            form_costellazioni, form_talenti, form_equipaggiamento
+            id_pg,
+            form_personaggio,
+            form_arma,
+            form_costellazioni,
+            form_talenti,
+            form_equipaggiamento,
+            meta=meta,
         )
 
     def elimina_personaggio(self, id_pg: int):
@@ -80,6 +64,9 @@ class AppService:
 
     def nomi_per_autocomplete(self):
         return self._personaggio.nomi_per_autocomplete()
+
+    def nomi_armi_autocomplete(self):
+        return self._personaggio.nomi_armi_autocomplete()
 
     def rimuovi_entrate_test(self):
         return self._personaggio.rimuovi_entrate_test()
@@ -122,6 +109,14 @@ class AppService:
     def suggerimenti_personaggi_per_artefatto(self, artefatto_id: int):
         return self._artefatto.suggerimenti_personaggi_per_artefatto(artefatto_id)
 
+    def suggerimenti_ottimizzazione_manufatti_tutti(self):
+        """Equip vs magazzino per ogni personaggio (solo lettura)."""
+        return self._artefatto.suggerimenti_ottimizzazione_tutti()
+
+    def suggerimenti_ottimizzazione_manufatti(self, personaggio_id: int):
+        """Equip vs magazzino per un personaggio."""
+        return self._artefatto.suggerimenti_ottimizzazione_per_personaggio(personaggio_id)
+
     def aggiorna_artefatto(self, artefatto_id: int, form_values: dict):
         self._artefatto.aggiorna_artefatto(artefatto_id, form_values)
 
@@ -139,9 +134,6 @@ class AppService:
 
     def main_stats_per_slot(self, slot: str):
         return self._artefatto.main_stats_per_slot(slot)
-
-    def cerca_artefatto_online(self, query: str):
-        return self._artefatto.cerca_artefatto_online(query)
 
     def cerca_artefatto_web(self, query: str):
         return self._artefatto.cerca_artefatto_web(query)

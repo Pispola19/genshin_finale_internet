@@ -11,13 +11,12 @@
     <div class="nav-pages">
       <a href="personaggio.html">Personaggio</a>
       <a href="artefatti.html">Manufatti</a>
+      <a href="ottimizzazione.html">Ottimizzazione</a>
       <a href="build.html">Build Analysis</a>
       <a href="rotation.html">Rotazione</a>
       <a href="team.html">Team Builder</a>
       <a href="dashboard.html">Dashboard</a>
-      <a href="personaggio.html#import" class="nav-import">Import</a>
       <a href="istruzioni.html" class="active">Come si usa</a>
-      <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
     </div>
   </nav>
 
@@ -39,18 +38,43 @@
       <p>Per evitare che <strong>chiunque</strong> con l’URL modifichi o cancelli i dati nel database, l’amministratore può impostare su Render la variabile <strong>GENSHIN_WEB_WRITE_PASSWORD</strong>. Dopo di che, <strong>Salva</strong>, <strong>Import JSON</strong> e le modifiche ai <strong>Manufatti</strong> aprono la pagina di <a href="login.html">accesso modifiche</a> (URL diretto: <code>login.html</code>). La password <strong>non</strong> è nel JavaScript pubblico: resta solo sul server; il browser usa un cookie di sessione sicuro.</p>
       <p class="page-hint">Senza quella variabile, il sito resta comodo in locale ma chiunque trovi l’indirizzo può ancora scrivere nel database. <strong>SECRET_KEY</strong> (già consigliata su Render) serve a firmare la sessione.</p>
 
+      <h2>1) Iniziare</h2>
+      <ul style="line-height:1.65;margin-left:1.2rem">
+        <li><strong>Crea personaggio:</strong> apri <a href="personaggio.html">Personaggio</a>, compila i campi e premi <strong>SALVA</strong>.</li>
+        <li><strong>Aggiungi manufatti:</strong> apri <a href="artefatti.html">Manufatti</a> → scheda <strong>Archivio</strong> → crea i pezzi.</li>
+        <li><strong>Equipaggia i 5 slot:</strong> usa <strong>Equip personaggio</strong> in Manufatti (Fiore, Piuma, Sabbie, Calice, Corona).</li>
+        <li><strong>Ottimizza:</strong> vai in <a href="ottimizzazione.html">Ottimizzazione</a> per vedere i suggerimenti e aprire subito Equip.</li>
+      </ul>
+
+      <h2>2) Come funziona</h2>
+      <ul style="line-height:1.65;margin-left:1.2rem">
+        <li><strong>DPS (Build/Dashboard):</strong> usa solo i manufatti realmente assegnati in <a href="artefatti.html">Manufatti</a>.</li>
+        <li><strong>Ottimizzazione:</strong> suggerisce il pezzo migliore in magazzino, ma <strong>non modifica</strong> nulla in automatico.</li>
+        <li><strong>Personaggio:</strong> la sezione manufatti in questa pagina è solo lettura; l’equip si cambia solo in Manufatti.</li>
+      </ul>
+
+      <h2>3) Errori comuni</h2>
+      <ul style="line-height:1.65;margin-left:1.2rem">
+        <li><strong>DPS basso o incoerente:</strong> il personaggio non ha 5 manufatti equipaggiati.</li>
+        <li><strong>Confusione sulle stats:</strong> stats nella scheda Personaggio <strong>non</strong> sostituiscono le stats dei manufatti.</li>
+        <li><strong>Nessun suggerimento in Ottimizzazione:</strong> mancano pezzi liberi in magazzino o personaggi salvati.</li>
+      </ul>
+
       <h2>Due posti diversi (importante)</h2>
       <ul style="line-height:1.65;margin-left:1.2rem">
         <li><strong><a href="personaggio.html">Personaggio</a></strong> — scheda dell’eroe: nome, livello, stats foglio, arma, costellazioni, talenti. I <strong>manufatti</strong> qui sono solo in <strong>lettura</strong> (cosa risulta assegnato nel database). <strong>Salva</strong> non sposta più i pezzi tra magazzino ed equip.</li>
         <li><strong><a href="artefatti.html">Manufatti</a></strong> — due schede: <strong>Archivio</strong> (registri/modifichi i pezzi e tabella con filtri) e <strong>Equip personaggio</strong> (cinque slot in vista rapida). Puoi anche assegnare dal modulo in Archivio (riquadro blu) o aprire direttamente <a href="artefatti.html#equip">Equip</a>. È l’<strong>unico</strong> posto per equipaggiare o togliere un pezzo da un PG.</li>
       </ul>
 
+      <h2 id="ottimizzazione-manufatti">Ottimizzazione manufatti</h2>
+      <p>La sezione <strong><a href="ottimizzazione.html">Ottimizzazione</a></strong> suggerisce miglioramenti. Per applicarli, vai alla sezione <strong><a href="artefatti.html#equip">Manufatti</a></strong> e assegna manualmente il pezzo consigliato. Su ogni slot migliorabile trovi anche il pulsante <strong>Vai a Manufatti (equip)</strong>, che apre Equip sul personaggio e sullo slot indicato.</p>
+
       <h2 id="dps-e-manufatti">DPS e manufatti (da ricordare)</h2>
       <p>Il <strong>DPS indicativo</strong> in <strong>Build Analysis</strong> e <strong>Dashboard</strong> viene calcolato solo dalle statistiche dei <strong>manufatti equipaggiati</strong> (quelli con il tuo personaggio selezionato in Manufatti). Le caselle HP, ATK, CR, CD, ecc. sulla scheda Personaggio <strong>non</strong> vengono sommate nel calcolo “artefatti” dell’app: servono come appunti o per altri usi futuri.</p>
       <p class="page-hint">Quindi: anche se salvi il personaggio con tutte le stat compilate, <strong>senza manufatti assegnati</strong> il DPS da build resta basso o non rappresenta un set completo. Assegna i cinque slot da <a href="artefatti.html">Manufatti</a>.</p>
 
       <h2>Personaggio — ricerca e salvataggio</h2>
-      <p class="page-hint" style="margin-bottom:0.85rem">Nella casella <strong>Seleziona Personaggio</strong> trovi l’elenco nomi Genshin (Hoyolab) più le schede che salvi: dopo <strong>Salva</strong> il database si aggiorna e il nome compare come <strong>Salvato</strong>; <strong>Nuovo</strong> prepara una scheda vuota.</p>
+      <p class="page-hint" style="margin-bottom:0.85rem">Nella casella <strong>Seleziona Personaggio</strong> trovi suggerimenti di nome più le schede che salvi: dopo <strong>Salva</strong> il database si aggiorna e il nome compare come <strong>Salvato</strong>; <strong>Nuovo</strong> prepara una scheda vuota.</p>
 
       <h2>Personaggio — passo passo</h2>
       <ol style="line-height:1.65;margin-left:1.2rem">
@@ -71,11 +95,11 @@
       </ul>
       <p class="page-hint">I pezzi <strong>liberi</strong> in magazzino sono quelli usati dalla Build per la versione “ottimale” (miglior combinazione tra i liberi per slot).</p>
 
-      <h3 id="manufatti-set-compilare">Set — come compilare (modulo Manufatti)</h3>
+      <h3 id="manufatti-set-compilare">Set e pezzo — modulo Manufatti</h3>
       <ul style="line-height:1.65;margin-left:1.2rem">
-        <li><strong>Menu a tendina</strong> «— Scegli set —»: è l’<strong>unico elenco</strong> guidato dal catalogo; serve soprattutto per avere i <strong>nomi pezzo</strong> coerenti con set e <strong>slot</strong> scelti.</li>
-        <li><strong>Casella di testo accanto</strong> (senza titolo): <strong>scrittura libera</strong> del nome set (come nel gioco, varianti, set non ancora in elenco). Se c’è testo lì, <em>quello</em> ha <strong>priorità</strong> sul menu e viene usato al salvataggio.</li>
-        <li>Dopo <strong>AGGIUNGI</strong> o <strong>SALVA MODIFICHE</strong>, un nome set nuovo viene aggiunto all’elenco del menu per le registrazioni successive.</li>
+        <li><strong>Set</strong> e <strong>nome pezzo</strong> si scelgono <strong>solo</strong> dai menu: elenco ufficiale interno (catalogo in <code>core/manufatti_ufficiali.py</code>), allineato alle stringhe di gioco. Nessuna scrittura libera.</li>
+        <li>Il menu pezzo si aggiorna in base a <strong>set</strong> e <strong>slot</strong> (fiore, piuma, …): deve combaciare il nome ufficiale del pezzo in quel set.</li>
+        <li>Nuovi set della patch: aggiungerli al file <code>core/manufatti_ufficiali.py</code>, poi ricaricare l’app.</li>
       </ul>
 
       <h2 id="filtri-inventario-manufatti">Filtri inventario (pagina Manufatti)</h2>

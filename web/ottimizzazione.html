@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="api-base" content="/api">
+  <title>Ottimizzazione manufatti — Genshin Manager</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page-bg page-bg-personaggio">
+  <nav class="app-nav" aria-label="Navigazione principale">
+    <div class="nav-pages">
+      <a href="personaggio.html">Personaggio</a>
+      <a href="artefatti.html">Manufatti</a>
+      <a href="ottimizzazione.html" class="active">Ottimizzazione</a>
+      <a href="build.html">Build Analysis</a>
+      <a href="rotation.html">Rotazione</a>
+      <a href="team.html">Team Builder</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="istruzioni.html">Come si usa</a>
+      <a href="https://www.hoyolab.com/home" class="nav-login nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
+    </div>
+  </nav>
+
+  <aside class="app-notice app-notice-dps" role="note">
+    <span class="app-notice-text"><strong>Solo suggerimenti:</strong> stesso indice di Manufatti (<code>score_artefatto_per_personaggio</code>), non DPS reale. Nessuna modifica automatica — per equipaggiare vai a <a href="artefatti.html">Manufatti</a>.</span>
+    <a class="app-notice-link" href="istruzioni.html#dps-e-manufatti">Come si usa</a>
+  </aside>
+
+  <main class="opt-page">
+    <div class="section section-header">
+      <h1>Ottimizzazione manufatti</h1>
+      <p class="page-hint page-hint-oneline" style="max-width: 44rem;">Per ogni personaggio confrontiamo i 5 pezzi equipaggiati con il <strong>miglior pezzo libero in magazzino</strong> sullo stesso slot. Negli slot migliorabili usa <strong>Vai a Manufatti (equip)</strong>.</p>
+      <p id="optErrore" class="page-hint dashboard-errore-msg" hidden></p>
+    </div>
+
+    <div class="section" id="optVuoto" hidden>
+      <p class="page-hint">Nessun personaggio salvato. Vai in <a href="personaggio.html">Personaggio</a> e crea una scheda.</p>
+    </div>
+
+    <div class="section" id="optGuida" hidden>
+      <p class="page-hint"><strong>Non hai ancora manufatti assegnati.</strong> Vai in <a href="artefatti.html#equip">Manufatti → Equip personaggio</a> per iniziare.</p>
+    </div>
+
+    <div id="optLista" class="opt-lista" aria-live="polite"></div>
+
+    <div class="section">
+      <button type="button" class="btn btn-primary" id="btnOptAggiorna">Aggiorna</button>
+    </div>
+  </main>
+
+  <script src="js/session-fetch.js"></script>
+  <script src="js/ottimizzazione.js"></script>
+</body>
+</html>

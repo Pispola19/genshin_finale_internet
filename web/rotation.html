@@ -12,13 +12,12 @@
     <div class="nav-pages">
       <a href="personaggio.html">Personaggio</a>
       <a href="artefatti.html">Manufatti</a>
+      <a href="ottimizzazione.html">Ottimizzazione</a>
       <a href="build.html">Build Analysis</a>
       <a href="rotation.html" class="active">Rotazione</a>
       <a href="team.html">Team Builder</a>
       <a href="dashboard.html">Dashboard</a>
-      <a href="personaggio.html#import" class="nav-import">Import</a>
       <a href="istruzioni.html">Come si usa</a>
-      <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
     </div>
   </nav>
 
@@ -30,7 +29,7 @@
   <main>
     <div class="section section-autocomplete">
       <h2>Indice rotazione (personaggio salvato)</h2>
-      <p class="page-hint">Servono personaggio <strong>salvato</strong> nel database con foglio, arma e (per il proxy) manufatti equipaggiati come in <a href="build.html">Build Analysis</a>.</p>
+      <p class="page-hint">Seleziona un <strong>personaggio salvato</strong> con manufatti equipaggiati in <a href="build.html">Build Analysis</a>.</p>
       <div class="form-row">
         <label for="rotPgSelect">Personaggio</label>
         <select id="rotPgSelect"></select>
@@ -44,7 +43,7 @@
         </select>
       </div>
       <p class="page-hint" id="rotationErr" hidden style="color:#b45309;font-weight:600"></p>
-      <button type="button" class="btn-primary" id="rotCalcBtn">Calcola</button>
+      <button type="button" class="btn-primary" id="rotCalcBtn">Calcola indice</button>
     </div>
 
     <div class="section" id="rotationResult" hidden>

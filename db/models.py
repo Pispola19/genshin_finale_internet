@@ -17,13 +17,24 @@ class Personaggio:
     cr: Optional[int]
     cd: Optional[int]
     er: Optional[int]
+    origine_nome: str = "ufficiale"
+    data_nome_custom: Optional[str] = None
+    nota_nome_custom: Optional[str] = None
 
     @classmethod
     def from_row(cls, row: tuple) -> "Personaggio":
+        on, dc, nn = "ufficiale", None, None
+        if len(row) > 11:
+            on = row[11] if row[11] else "ufficiale"
+        if len(row) > 12:
+            dc = row[12]
+        if len(row) > 13:
+            nn = row[13]
         return cls(
             id=row[0], nome=row[1] or "", livello=row[2] or 1, elemento=row[3] or "Pyro",
             hp_flat=row[4], atk_flat=row[5], def_flat=row[6], em_flat=row[7],
-            cr=row[8], cd=row[9], er=row[10]
+            cr=row[8], cd=row[9], er=row[10],
+            origine_nome=on, data_nome_custom=dc, nota_nome_custom=nn,
         )
 
 
@@ -38,13 +49,24 @@ class Arma:
     atk_base: Optional[int]
     stat_secondaria: Optional[str]
     valore_stat: Optional[float]
+    origine_nome: str = "ufficiale"
+    data_nome_custom: Optional[str] = None
+    nota_nome_custom: Optional[str] = None
 
     @classmethod
     def from_row(cls, row: tuple) -> "Arma":
+        on, dc, nn = "ufficiale", None, None
+        if len(row) > 9:
+            on = row[9] if row[9] else "ufficiale"
+        if len(row) > 10:
+            dc = row[10]
+        if len(row) > 11:
+            nn = row[11]
         return cls(
             id=row[0], personaggio_id=row[1], nome=row[2] or "",
             tipo=row[3] or "Spada", livello=row[4] or 1, stelle=row[5] or 5,
-            atk_base=row[6], stat_secondaria=row[7], valore_stat=row[8]
+            atk_base=row[6], stat_secondaria=row[7], valore_stat=row[8],
+            origine_nome=on, data_nome_custom=dc, nota_nome_custom=nn,
         )
 
 

@@ -12,10 +12,13 @@ services:
         value: "3.11.9"
       - key: SECRET_KEY
         generateValue: true
-      # Sicurezza web (consigliato su Internet): password per salvare / import / manufatti.
-      # Crea la variabile a mano in Render → Environment (non committare la password nel repo):
-      #   GENSHIN_WEB_WRITE_PASSWORD = una password lunga che condividi solo con chi può modificare i dati
-      # Cookie di sessione HTTPS: su Render è attivo RENDER → SESSION_COOKIE_SECURE già gestito in app.
+      # OBBLIGATORIA: senza di essa il servizio non si avvia. Password unica (lettura + scrittura API).
+      # In Render → Environment aggiungi manualmente (non committare nel repo):
+      #   GENSHIN_WEB_WRITE_PASSWORD = password lunga nota solo a chi deve usare l’app
+      # Cookie sessione HTTPS: RENDER attiva SESSION_COOKIE_SECURE in app.
       # Opzionale: monta un Disco e punta i DB persistenti:
       # - key: GINSHIN_DATA_DIR
       #   value: /var/data
+      # Whitelist: in produzione (Render) è sempre strict. In locale: GENSHIN_WHITELIST_STRICT=0 solo per dev.
+      # - key: GENSHIN_WHITELIST_STRICT
+      #   value: "1"

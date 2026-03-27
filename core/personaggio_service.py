@@ -2,12 +2,27 @@
 PersonaggioService - logica personaggio, arma, costellazioni, talenti, equipaggiamento.
 Tutte le chiamate ai Repository per personaggi passano da qui.
 """
-from typing import Any, List, Optional, Tuple
+from __future__ import annotations
 
-from core.validation import parse_number, validate_nome
+from datetime import datetime, timezone
+from typing import List, Optional, Tuple
+
+from config import SLOT_DB
+from core.custom_registry import approved_armi_names, approved_personaggi_names
+from core.nome_normalization import (
+    canonicalizza_nome_arma,
+    canonicalizza_nome_personaggio,
+    norm_key_nome,
+)
+from core.nomi_whitelist import (
+    WHITELIST_ARMI,
+    WHITELIST_ARMI_EFFECTIVE,
+    WHITELIST_PERSONAGGI,
+    WHITELIST_PERSONAGGI_EFFECTIVE,
+)
+from core.validation import parse_number, validate_arma_nome, validate_nome
 from db.connection import close_thread_connections, get_connection, get_artefatti_connection
-from config import SLOT_DB, PERSONAGGI_GENSHIN
-from db.models import Arma
+from db.models import Arma, Personaggio
 from db.repositories import (
     PersonaggioRepository,
     ArmaRepository,
@@ -15,6 +30,44 @@ from db.repositories import (
     CostellazioniRepository,
     TalentiRepository,
 )
+
+
+def _iso_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _audit_personaggio_nome(nome: str, existing: Optional[Personaggio], meta: dict) -> Tuple[str, Optional[str], Optional[str]]:
+    nome = canonicalizza_nome_personaggio(nome or "")
+    reg = approved_personaggi_names()
+    if nome in WHITELIST_PERSONAGGI or nome in reg:
+        return "ufficiale", None, None
+    if existing and norm_key_nome(existing.nome) == norm_key_nome(nome) and (existing.origine_nome or "") == "custom":
+        data = existing.data_nome_custom or _iso_now()
+        if meta.get("personaggio_custom_note") is not None:
+            note = (meta.get("personaggio_custom_note") or "").strip() or None
+        else:
+            note = existing.nota_nome_custom
+        return "custom", data, note
+    note = (meta.get("personaggio_custom_note") or "").strip() or None
+    return "custom", _iso_now(), note
+
+
+def _audit_arma_nome(nome: str, existing: Optional[Arma], meta: dict) -> Tuple[str, Optional[str], Optional[str]]:
+    s = canonicalizza_nome_arma(nome or "")
+    if not s:
+        return "ufficiale", None, None
+    reg = approved_armi_names()
+    if s in WHITELIST_ARMI or s in reg:
+        return "ufficiale", None, None
+    if existing and norm_key_nome(existing.nome or "") == norm_key_nome(s) and (existing.origine_nome or "") == "custom":
+        data = existing.data_nome_custom or _iso_now()
+        if meta.get("arma_custom_note") is not None:
+            note = (meta.get("arma_custom_note") or "").strip() or None
+        else:
+            note = existing.nota_nome_custom
+        return "custom", data, note
+    note = (meta.get("arma_custom_note") or "").strip() or None
+    return "custom", _iso_now(), note
 
 
 def _is_test_name(nome: str) -> bool:
@@ -50,12 +103,28 @@ class PersonaggioService:
         return get_artefatti_connection()
 
     # --- Validazione ---
-    def valida_nome(self, nome: str, escludi_id: Optional[int] = None) -> Tuple[bool, str]:
-        ok, msg = validate_nome(nome)
+    def valida_nome(
+        self,
+        nome: str,
+        escludi_id: Optional[int] = None,
+        *,
+        custom_confirm: bool = False,
+    ) -> Tuple[bool, str]:
+        nome_c = canonicalizza_nome_personaggio(nome or "")
+        if escludi_id is not None:
+            ex = PersonaggioRepository.get(self.conn, escludi_id)
+            if ex and norm_key_nome(ex.nome) == norm_key_nome(nome_c):
+                ok, msg = validate_nome(nome_c, custom_confirm=custom_confirm)
+                if not ok:
+                    return False, msg
+                if PersonaggioRepository.nome_esiste(self.conn, nome_c, escludi_id):
+                    return False, f"Il nome '{nome_c}' è già usato (anche con altre maiuscole o spazi)."
+                return True, ""
+        ok, msg = validate_nome(nome_c, custom_confirm=custom_confirm)
         if not ok:
             return False, msg
-        if PersonaggioRepository.nome_esiste(self.conn, nome, escludi_id):
-            return False, f"Il nome '{nome}' è già usato."
+        if PersonaggioRepository.nome_esiste(self.conn, nome_c, escludi_id):
+            return False, f"Il nome '{nome_c}' è già usato (anche con altre maiuscole o spazi)."
         return True, ""
 
     def id_per_nome(self, nome: str) -> Optional[int]:
@@ -87,14 +156,9 @@ class PersonaggioService:
         def _fmt(v):
             return "-" if (v is None or v == "") else str(v)
 
-        return {
-            "nome": pg.nome,
-            "livello": _fmt(pg.livello),
-            "elemento": pg.elemento,
-            "hp_flat": _fmt(pg.hp_flat), "atk_flat": _fmt(pg.atk_flat),
-            "def_flat": _fmt(pg.def_flat), "em_flat": _fmt(pg.em_flat),
-            "cr": _fmt(pg.cr), "cd": _fmt(pg.cd), "er": _fmt(pg.er),
-            "arma": {
+        arma_block = None
+        if arma:
+            arma_block = {
                 "nome": arma.nome if arma else "",
                 "tipo": arma.tipo if arma else "Spada",
                 "livello": _fmt(arma.livello) if arma else "",
@@ -102,7 +166,28 @@ class PersonaggioService:
                 "atk_base": _fmt(arma.atk_base) if arma else "",
                 "stat_secondaria": (arma.stat_secondaria or "") if arma else "",
                 "valore_stat": _fmt(arma.valore_stat) if arma else "",
-            } if arma else {"nome": "", "tipo": "Spada", "livello": "", "stelle": "", "atk_base": "", "stat_secondaria": "", "valore_stat": ""},
+                "origine_nome": (arma.origine_nome or "ufficiale") if arma else "ufficiale",
+                "data_nome_custom": arma.data_nome_custom,
+                "nota_nome_custom": arma.nota_nome_custom,
+            }
+        else:
+            arma_block = {
+                "nome": "", "tipo": "Spada", "livello": "", "stelle": "", "atk_base": "",
+                "stat_secondaria": "", "valore_stat": "",
+                "origine_nome": "ufficiale", "data_nome_custom": None, "nota_nome_custom": None,
+            }
+
+        return {
+            "nome": pg.nome,
+            "livello": _fmt(pg.livello),
+            "elemento": pg.elemento,
+            "hp_flat": _fmt(pg.hp_flat), "atk_flat": _fmt(pg.atk_flat),
+            "def_flat": _fmt(pg.def_flat), "em_flat": _fmt(pg.em_flat),
+            "cr": _fmt(pg.cr), "cd": _fmt(pg.cd), "er": _fmt(pg.er),
+            "origine_nome": pg.origine_nome or "ufficiale",
+            "data_nome_custom": pg.data_nome_custom,
+            "nota_nome_custom": pg.nota_nome_custom,
+            "arma": arma_block,
             "costellazioni": [cost.c1, cost.c2, cost.c3, cost.c4, cost.c5, cost.c6],
 
             "talenti": [
@@ -116,7 +201,8 @@ class PersonaggioService:
             ],
             "artefatti": {
                 slot: self._artefatto_per_ui(artefatti[slot])
-                if slot in artefatti else {"id": None, "set": "", "main_stat": "", "main_val": None, "subs": []}
+                if slot in artefatti
+                else {"id": None, "set": "", "main_stat": "", "main_val": None, "subs": [], "label": "—"}
                 for slot in SLOT_DB
             },
         }
@@ -128,15 +214,17 @@ class PersonaggioService:
             s, v = art.get(f"sub{i}_stat"), art.get(f"sub{i}_val")
             if s or v is not None:
                 subs.append({"stat": s or "", "val": v})
+        sn = art.get("set_nome") or ""
         return {
             "id": art["id"],
-            "set": art.get("set_nome") or "",
+            "set": sn,
             "nome": art.get("nome") or "",
             "main_stat": art.get("main_stat") or "",
             "main_val": art.get("main_val"),
             "livello": art.get("livello"),
             "stelle": art.get("stelle"),
             "subs": subs,
+            "label": f"#{art['id']} {sn} {art.get('main_stat') or ''}".strip(),
         }
 
     def get_personaggio(self, id_pg: int):
@@ -160,11 +248,12 @@ class PersonaggioService:
         return PersonaggioRepository.lista(self.conn)
 
     def nomi_per_autocomplete(self) -> List[str]:
-        """Lista nomi per autocomplete: PERSONAGGI_GENSHIN + personaggi esistenti non in lista."""
-        set_base = set(PERSONAGGI_GENSHIN)
-        righe = PersonaggioRepository.lista(self.conn)
-        extra = [r[1] for r in righe if r[1] and r[1].strip() and r[1] not in set_base]
-        return list(PERSONAGGI_GENSHIN) + sorted(set(extra))
+        """Elenco effettivo personaggi (codice ∪ registry approvato), ordinato."""
+        return sorted(WHITELIST_PERSONAGGI_EFFECTIVE, key=str.lower)
+
+    def nomi_armi_autocomplete(self) -> List[str]:
+        """Elenco effettivo armi (codice ∪ registry approvato), ordinato."""
+        return sorted(WHITELIST_ARMI_EFFECTIVE, key=str.lower)
 
     def rimuovi_entrate_test(self) -> int:
         """Elimina personaggi con nome tipo 'test', 'Test1', ecc. Ritorna numero eliminati."""
@@ -187,45 +276,81 @@ class PersonaggioService:
         form_costellazioni: dict,
         form_talenti: dict,
         form_equipaggiamento: Optional[dict],
+        meta: Optional[dict] = None,
     ) -> int:
         """Salva personaggio e dati collegati. Ritorna id personaggio.
+
+        ``meta`` opzionale: personaggio_custom_note, arma_custom_note.
 
         Se ``form_equipaggiamento`` è ``None``, l'equip manufatti non viene toccato
         (es. web: assegnazione solo da pagina Manufatti).
         """
+        meta = meta or {}
         dati_pg = self._parse_personaggio(form_personaggio)
         dati_arma = self._parse_arma(form_arma)
+        dati_pg["nome"] = canonicalizza_nome_personaggio(dati_pg.get("nome") or "")
+        dati_arma["nome"] = canonicalizza_nome_arma(dati_arma.get("nome") or "")
         cost = self._parse_costellazioni(form_costellazioni)
         talenti = self._parse_talenti(form_talenti)
 
-        # Id obsoleto (es. scheda eliminata ma browser con id vecchio) → tratta come nuovo salvataggio
         if id_pg is not None and PersonaggioRepository.get(self.conn, id_pg) is None:
             id_pg = None
 
-        tuple_pg = self._to_tuple_pg(dati_pg)
-        if id_pg is None:
+        arma_nome = dati_arma.get("nome") or ""
+
+        merge_for_name = id_pg
+        ok_n, err_n = self.valida_nome(
+            dati_pg["nome"],
+            merge_for_name,
+            custom_confirm=True,
+        )
+        if not ok_n:
+            raise ValueError(err_n)
+
+        lookup_arma_pid = id_pg if id_pg is not None else PersonaggioRepository.id_per_nome(self.conn, dati_pg["nome"])
+        skip_arma_confirm = False
+        if lookup_arma_pid is not None:
+            old_a = ArmaRepository.get(self.conn, lookup_arma_pid)
+            if old_a and norm_key_nome(old_a.nome or "") == norm_key_nome(arma_nome):
+                skip_arma_confirm = True
+        if not skip_arma_confirm:
+            ok_a, err_a = validate_arma_nome(arma_nome, custom_confirm=True)
+            if not ok_a:
+                raise ValueError(f"Arma: {err_a}")
+
+        merge_id = lookup_arma_pid
+        exist_pg = PersonaggioRepository.get(self.conn, merge_id) if merge_id is not None else None
+        exist_ar = ArmaRepository.get(self.conn, merge_id) if merge_id is not None else None
+        o_p, d_p, n_p = _audit_personaggio_nome(dati_pg["nome"], exist_pg, meta)
+        o_a, d_a, n_a = _audit_arma_nome(arma_nome, exist_ar, meta)
+
+        tuple_pg = self._to_tuple_pg(dati_pg, o_p, d_p, n_p)
+        tuple_arma = self._to_tuple_arma(dati_arma, o_a, d_a, n_a)
+
+        final_id = id_pg
+        if final_id is None:
             existing_id = PersonaggioRepository.id_per_nome(self.conn, dati_pg["nome"])
             if existing_id is not None:
-                id_pg = existing_id
-                PersonaggioRepository.update(self.conn, id_pg, tuple_pg)
+                final_id = existing_id
+                PersonaggioRepository.update(self.conn, final_id, tuple_pg)
             else:
-                id_pg = PersonaggioRepository.insert(self.conn, tuple_pg)
+                final_id = PersonaggioRepository.insert(self.conn, tuple_pg)
         else:
-            PersonaggioRepository.update(self.conn, id_pg, tuple_pg)
+            PersonaggioRepository.update(self.conn, final_id, tuple_pg)
 
-        ArmaRepository.upsert(self.conn, id_pg, self._to_tuple_arma(dati_arma))
-        CostellazioniRepository.upsert(self.conn, id_pg, *cost)
-        TalentiRepository.upsert(self.conn, id_pg, *talenti)
+        ArmaRepository.upsert(self.conn, final_id, tuple_arma)
+        CostellazioniRepository.upsert(self.conn, final_id, *cost)
+        TalentiRepository.upsert(self.conn, final_id, *talenti)
 
         if form_equipaggiamento is not None:
             for slot in SLOT_DB:
                 raw = form_equipaggiamento.get(slot)
                 if raw in (None, "", 0, "0"):
-                    ArtefattoRepository.set_equipaggiamento(self.conn_art, id_pg, slot, None)
+                    ArtefattoRepository.set_equipaggiamento(self.conn_art, final_id, slot, None)
                 else:
                     aid = int(raw)
-                    ArtefattoRepository.set_equipaggiamento(self.conn_art, id_pg, slot, aid)
-        return id_pg
+                    ArtefattoRepository.set_equipaggiamento(self.conn_art, final_id, slot, aid)
+        return final_id
 
     def elimina_personaggio(self, id_pg: int) -> None:
         ArtefattoRepository.unassign_all_for_personaggio(self.conn_art, id_pg)
@@ -282,7 +407,7 @@ class PersonaggioService:
         keys = ("aa", "skill", "burst", "pas1", "pas2", "pas3", "pas4")
         return tuple(self._parse_one_talento(f.get(k)) for k in keys)
 
-    def _to_tuple_pg(self, d: dict) -> tuple:
+    def _to_tuple_pg(self, d: dict, origine: str, data_c: Optional[str], nota: Optional[str]) -> tuple:
         def n(k, default=0):
             return d.get(k, default) if isinstance(d.get(k), (int, float)) else (parse_number(d.get(k), default=default) or default)
         return (
@@ -290,10 +415,13 @@ class PersonaggioService:
             n("livello", 1),
             d.get("elemento", "Pyro"),
             n("hp_flat"), n("atk_flat"), n("def_flat"), n("em_flat"),
-            n("cr"), n("cd"), n("er")
+            n("cr"), n("cd"), n("er"),
+            origine,
+            data_c,
+            nota,
         )
 
-    def _to_tuple_arma(self, d: dict) -> tuple:
+    def _to_tuple_arma(self, d: dict, origine: str, data_c: Optional[str], nota: Optional[str]) -> tuple:
         def n(k, default=0):
             return d.get(k, default) if isinstance(d.get(k), (int, float)) else (parse_number(d.get(k), default=default) or default)
         return (
@@ -303,250 +431,8 @@ class PersonaggioService:
             n("stelle", 5),
             n("atk_base"),
             d.get("stat_secondaria"),
-            parse_number(d.get("valore_stat")) if "valore_stat" in d else d.get("valore_stat")
+            parse_number(d.get("valore_stat")) if "valore_stat" in d else d.get("valore_stat"),
+            origine,
+            data_c,
+            nota,
         )
-
-    def replace_equipment_from_hoyo_relics(self, personaggio_id: int, relics: List[dict]) -> None:
-        """
-        Sostituisce i manufatti equipaggiati dal personaggio con nuove righe ricavate
-        da un array ``relics`` stile API HoYoLab (battle chronicle).
-        """
-        from db.artifact_catalog import register_extra_set
-
-        conn_art = self.conn_art
-        cur = conn_art.cursor()
-        cur.execute("SELECT id FROM artefatti WHERE assegna_a_id=?", (personaggio_id,))
-        old_ids = [r[0] for r in cur.fetchall()]
-        for aid in old_ids:
-            ArtefattoRepository.delete(conn_art, aid)
-
-        for rel in relics:
-            if not isinstance(rel, dict):
-                continue
-            row, slot = _hoyo_relic_row_and_slot(rel)
-            if not row or not slot:
-                continue
-            set_n = (row[1] or "").strip()
-            if set_n:
-                register_extra_set(set_n)
-            new_id = ArtefattoRepository.insert(conn_art, row)
-            ArtefattoRepository.set_equipaggiamento(conn_art, personaggio_id, slot, new_id)
-
-    def append_hoyo_relics_to_warehouse(self, relics: List[dict], *, dedup: bool = True) -> int:
-        """Aggiunge solo righe in inventario (non equipaggiate).
-
-        dedup=True: evita duplicati identici nello stesso stato di inventario usando chiave
-        (slot, set_nome, livello, stelle).
-        """
-        from db.artifact_catalog import register_extra_set
-
-        conn_art = self.conn_art
-        inserted = 0
-        cur = conn_art.cursor()
-        for rel in relics:
-            if not isinstance(rel, dict):
-                continue
-            row, slot = _hoyo_relic_row_and_slot(rel)
-            if not row or not slot:
-                continue
-            set_n = (row[1] or "").strip()
-            if set_n:
-                register_extra_set(set_n)
-
-            if dedup:
-                # Chiave dedup basata su slot/set/livello/rarita (richiesta utente).
-                # Nota: non considera main/sub per evitare drift tra payload incompleti.
-                cur.execute(
-                    """
-                    SELECT 1 FROM artefatti
-                    WHERE assegna_a_id IS NULL
-                      AND slot=? AND set_nome=? AND livello=? AND stelle=?
-                    LIMIT 1
-                    """,
-                    (row[0], row[1], row[3], row[4]),
-                )
-                if cur.fetchone():
-                    continue
-
-            ArtefattoRepository.insert(conn_art, row)
-            inserted += 1
-        return inserted
-
-    def update_equipment_from_hoyo_relics(self, personaggio_id: int, relics: List[dict]) -> None:
-        """Aggiorna solo gli slot presenti nel JSON; merge delle stat se HoYo è vuoto; non cancella altri pezzi."""
-        from db.artifact_catalog import register_extra_set
-
-        conn_art = self.conn_art
-        eq = ArtefattoRepository.equip_map_for_personaggio(conn_art, personaggio_id)
-        for rel in relics:
-            if not isinstance(rel, dict):
-                continue
-            row, slot = _hoyo_relic_row_and_slot(rel)
-            if not row or not slot:
-                continue
-            set_n = (row[1] or "").strip()
-            if set_n:
-                register_extra_set(set_n)
-            aid = eq.get(slot)
-            if aid:
-                ex = ArtefattoRepository.get(conn_art, aid)
-                if ex:
-                    merged = _overlay_hoyo_row_on_stored(_art_row_to_tuple(ex), row)
-                    ArtefattoRepository.update(conn_art, aid, merged)
-                    continue
-            new_id = ArtefattoRepository.insert(conn_art, row)
-            ArtefattoRepository.set_equipaggiamento(conn_art, personaggio_id, slot, new_id)
-            eq[slot] = new_id
-
-
-def _art_row_to_tuple(ex: dict) -> tuple:
-    def _i(k, d=0):
-        v = ex.get(k)
-        if v is None or v == "":
-            return d
-        try:
-            return int(v)
-        except (TypeError, ValueError):
-            return d
-
-    return (
-        ex.get("slot") or "fiore",
-        ex.get("set_nome") or "",
-        ex.get("nome") or "",
-        _i("livello", 0),
-        _i("stelle", 5),
-        ex.get("main_stat") or "",
-        ex.get("main_val"),
-        ex.get("sub1_stat") or "",
-        ex.get("sub1_val"),
-        ex.get("sub2_stat") or "",
-        ex.get("sub2_val"),
-        ex.get("sub3_stat") or "",
-        ex.get("sub3_val"),
-        ex.get("sub4_stat") or "",
-        ex.get("sub4_val"),
-    )
-
-
-def _overlay_hoyo_row_on_stored(stored: tuple, hoyo: tuple) -> tuple:
-    """Conserva stat da DB se HoYo non porta valori; aggiorna set/nome/livello/stelle se arrivano da HoYo."""
-    S = list(stored)
-    H = list(hoyo)
-    if len(S) < 15 or len(H) < 15:
-        return tuple(H)
-    for i in (1, 2):
-        if H[i] and str(H[i]).strip():
-            S[i] = H[i]
-    for i in (3, 4):
-        # livello/stelle: non sovrascriviamo con 0 (HoYo può non fornire info).
-        if H[i] is not None and str(H[i]).strip() != "":
-            try:
-                v = int(H[i])
-                if v > 0:
-                    S[i] = H[i]
-            except (TypeError, ValueError):
-                pass
-    if (H[5] and str(H[5]).strip()) or (H[6] not in (None, "")):
-        S[5], S[6] = H[5], H[6]
-    for j in range(4):
-        si = 7 + j * 2
-        if (H[si] and str(H[si]).strip()) or (H[si + 1] not in (None, "")):
-            S[si], S[si + 1] = H[si], H[si + 1]
-    return tuple(S)
-
-
-_HOYO_POS_TO_SLOT = {
-    1: "fiore",
-    2: "piuma",
-    3: "sabbie",
-    4: "calice",
-    5: "corona",
-}
-
-
-def _hoyo_relic_slot_from_dict(rel: dict) -> Optional[str]:
-    p = rel.get("pos")
-    try:
-        pi = int(p)
-    except (TypeError, ValueError):
-        pi = None
-    if pi in _HOYO_POS_TO_SLOT:
-        return _HOYO_POS_TO_SLOT[pi]
-    pn = str(rel.get("pos_name") or "").lower()
-    if "fiore" in pn:
-        return "fiore"
-    if "piuma" in pn:
-        return "piuma"
-    if "sabbie" in pn or "sabbia" in pn:
-        return "sabbie"
-    if "calice" in pn:
-        return "calice"
-    if "corona" in pn:
-        return "corona"
-    return None
-
-
-def _parse_hoyo_main_property(mp: Any) -> Tuple[str, Optional[float]]:
-    if mp is None:
-        return "", None
-    if isinstance(mp, dict):
-        name = str(mp.get("name") or mp.get("property_name") or "").strip()
-        val = mp.get("final") if mp.get("final") is not None else mp.get("value")
-        cv = parse_number(val)
-        return name, cv
-    return str(mp).strip(), None
-
-
-def _parse_hoyo_sub_list(subs: Any) -> List[Tuple[str, Optional[float]]]:
-    out: List[Tuple[str, Optional[float]]] = []
-    if not isinstance(subs, list):
-        return out
-    for s in subs[:4]:
-        if not isinstance(s, dict):
-            continue
-        name = str(s.get("name") or s.get("property_name") or "").strip()
-        val = s.get("final") if s.get("final") is not None else s.get("value")
-        out.append((name, parse_number(val)))
-    return out
-
-
-def _hoyo_relic_row_and_slot(rel: dict) -> Tuple[Optional[tuple], Optional[str]]:
-    slot = _hoyo_relic_slot_from_dict(rel)
-    if not slot:
-        return None, None
-    set_nome = ""
-    st = rel.get("set")
-    if isinstance(st, dict):
-        set_nome = str(st.get("name") or "").strip()
-    nome = str(rel.get("name") or "").strip()
-    try:
-        livello = int(rel.get("level") or 0)
-    except (TypeError, ValueError):
-        livello = 0
-    try:
-        stelle = int(rel.get("rarity") or 5)
-    except (TypeError, ValueError):
-        stelle = 5
-    stelle = min(5, max(1, stelle))
-    main_stat, main_val = _parse_hoyo_main_property(rel.get("main_property"))
-    subs = _parse_hoyo_sub_list(rel.get("sub_property_list"))
-    while len(subs) < 4:
-        subs.append(("", None))
-    row = (
-        slot,
-        set_nome,
-        nome,
-        livello,
-        stelle,
-        main_stat or "",
-        main_val,
-        subs[0][0] or "",
-        subs[0][1],
-        subs[1][0] or "",
-        subs[1][1],
-        subs[2][0] or "",
-        subs[2][1],
-        subs[3][0] or "",
-        subs[3][1],
-    )
-    return row, slot

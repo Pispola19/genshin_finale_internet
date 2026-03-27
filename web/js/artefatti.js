@@ -352,16 +352,8 @@ function fillSelect(sel, items, emptyLabel) {
   }
 }
 
-function toggleCustomNome(show) {
-  const w = document.getElementById("nome_custom_wrap");
-  if (w) w.hidden = !show;
-}
-
-/** Set effettivo: campo «Set libero» ha priorità sul menu catalogo. */
+/** Set: solo menu catalogo ufficiale. */
 function resolveSetNome() {
-  const customEl = document.getElementById("set_nome_custom");
-  const custom = customEl && customEl.value ? String(customEl.value).trim() : "";
-  if (custom) return custom;
   const sel = document.getElementById("set_nome");
   return sel && sel.value ? String(sel.value).trim() : "";
 }
@@ -380,18 +372,7 @@ function fillNomePezzoOptions(pezzi) {
     o.textContent = text;
     sel.appendChild(o);
   }
-  const oc = document.createElement("option");
-  oc.value = "__custom__";
-  oc.textContent = "Altro (scrivi sotto)";
-  sel.appendChild(oc);
-  if (pezzi.length === 1) {
-    sel.value = pezzi[0];
-    toggleCustomNome(false);
-    const c = document.getElementById("nome_custom");
-    if (c) c.value = "";
-  } else {
-    toggleCustomNome(pezzi.length === 0);
-  }
+  if (pezzi.length === 1) sel.value = pezzi[0];
 }
 
 async function refreshPezzoSelect() {
@@ -406,9 +387,6 @@ async function refreshPezzoSelect() {
     ph.value = "";
     ph.textContent = "— Scegli prima il set —";
     selPezzo.appendChild(ph);
-    toggleCustomNome(false);
-    const c = document.getElementById("nome_custom");
-    if (c) c.value = "";
     return;
   }
   try {
@@ -425,12 +403,8 @@ async function refreshPezzoSelect() {
 
 function resolveNomePezzo() {
   const pezzoSel = document.getElementById("nome_pezzo");
-  const custom = document.getElementById("nome_custom");
-  if (!pezzoSel) return "";
-  const v = pezzoSel.value;
-  if (v === "__custom__") return custom && custom.value ? custom.value.trim() : "";
-  if (v) return v.trim();
-  return custom && custom.value ? custom.value.trim() : "";
+  if (!pezzoSel || !pezzoSel.value) return "";
+  return String(pezzoSel.value).trim();
 }
 
 async function loadCatalogo(slot) {
@@ -522,11 +496,7 @@ function resetForm() {
   document.getElementById("main_val").value = "";
   document.getElementById("slot").value = "fiore";
   document.getElementById("set_nome").value = "";
-  const setLib = document.getElementById("set_nome_custom");
-  if (setLib) setLib.value = "";
-  document.getElementById("nome_custom").value = "";
   document.getElementById("assegn_a_personaggio").value = "";
-  toggleCustomNome(false);
   document.querySelectorAll(".sub_val").forEach(el => {
     el.value = "";
   });
@@ -550,8 +520,6 @@ async function caricaNelModulo(aid) {
   await loadCatalogo(slot);
   const rawSet = (d.set_nome || "").trim();
   const setSel = document.getElementById("set_nome");
-  const setLib = document.getElementById("set_nome_custom");
-  if (setLib) setLib.value = "";
   let inCatalog = false;
   if (setSel && rawSet) {
     for (const o of setSel.options) {
@@ -563,8 +531,10 @@ async function caricaNelModulo(aid) {
     }
   }
   if (!inCatalog && rawSet) {
+    window.alert(
+      "Il set salvato non è nell’elenco ufficiale. Scegli un set dal catalogo per modificare o salvare questo pezzo."
+    );
     if (setSel) setSel.value = "";
-    if (setLib) setLib.value = rawSet;
   } else if (setSel && !rawSet) {
     setSel.value = "";
   }
@@ -581,14 +551,10 @@ async function caricaNelModulo(aid) {
       }
     }
     if (!found && nomeVal) {
-      nomeSel.value = "__custom__";
-      const c = document.getElementById("nome_custom");
-      if (c) c.value = nomeVal;
-      toggleCustomNome(true);
-    } else {
-      toggleCustomNome(false);
-      const c = document.getElementById("nome_custom");
-      if (c) c.value = "";
+      window.alert(
+        "Il nome pezzo salvato non corrisponde al catalogo per questo set/slot. Scegli un pezzo dal menu."
+      );
+      nomeSel.value = "";
     }
   }
   setSelectValue(document.getElementById("main_stat"), d.main_stat);
@@ -627,10 +593,15 @@ function buildRowHtml(a) {
 function rowContainsStatToken(a, token) {
   const t = (token || "").trim().toLowerCase();
   if (!t) return true;
+  // Alias: nell'app alcuni dati salvati usano "ER" mentre l'utente si aspetta "ER%".
+  // I token vengono trattati come equivalenti per i filtri.
+  let tt = t;
+  if (tt === "er%" || tt === "ricarica%" || tt === "ricarica% ") tt = "er";
+  if (tt === "er" && (t === "ricarica" || t === "ricarica%")) tt = "er";
   const main = String(a.main || "").toLowerCase();
-  if (main.includes(t)) return true;
+  if (main.includes(tt)) return true;
   for (const s of a.subs || []) {
-    if (String(s.stat || "").toLowerCase().includes(t)) return true;
+    if (String(s.stat || "").toLowerCase().includes(tt)) return true;
   }
   return false;
 }
@@ -974,19 +945,6 @@ async function salvaModuloManufatto() {
 
 document.getElementById("slot").addEventListener("change", () => loadCatalogo(document.getElementById("slot").value));
 document.getElementById("set_nome").addEventListener("change", () => refreshPezzoSelect());
-document.getElementById("set_nome_custom")?.addEventListener("input", () => void refreshPezzoSelect());
-document.getElementById("set_nome_custom")?.addEventListener("change", () => void refreshPezzoSelect());
-const nomePezzoEl = document.getElementById("nome_pezzo");
-if (nomePezzoEl) {
-  nomePezzoEl.addEventListener("change", () => {
-    const v = nomePezzoEl.value;
-    toggleCustomNome(v === "__custom__");
-    if (v !== "__custom__") {
-      const c = document.getElementById("nome_custom");
-      if (c) c.value = "";
-    }
-  });
-}
 document.getElementById("btnAggiungi").addEventListener("click", () => void salvaModuloManufatto());
 document.getElementById("btnAnnullaForm")?.addEventListener("click", () => resetForm());
 document.getElementById("btnEliminaForm")?.addEventListener("click", () => {
@@ -1051,6 +1009,8 @@ function wireFiltriToggle() {
   });
 }
 
+const EQUIP_SLOT_KEYS = new Set(EQUIP_SLOTS.map((s) => s.k));
+
 async function initArtefattiPage() {
   buildEquipGridHtml();
   wireInvTabs();
@@ -1059,9 +1019,32 @@ async function initArtefattiPage() {
   wireFiltriToggle();
   await Promise.all([loadPersonaggiPerForm(), loadEquipPersonaggiSelect(), loadCatalogo("fiore")]);
   await loadMagazzino();
-  if (location.hash === "#equip") {
+  const params = new URLSearchParams(location.search);
+  const pgDeep = (params.get("pg") || params.get("personaggio_id") || "").trim();
+  const slotDeep = (params.get("slot") || "").trim().toLowerCase();
+  const hashEquip = location.hash === "#equip";
+  const openEquip = hashEquip || !!pgDeep;
+  if (openEquip) {
     document.getElementById("invTabEquip")?.click();
+  }
+  if (pgDeep) {
+    const sel = document.getElementById("equipPersonaggio");
+    const id = parseInt(pgDeep, 10);
+    if (sel && Number.isFinite(id) && [...sel.options].some((o) => o.value === String(id))) {
+      sel.value = String(id);
+    }
+    await refreshEquipPanel();
+  }
+  if (hashEquip) {
     history.replaceState(null, "", location.pathname + location.search);
+  }
+  if (openEquip && slotDeep && EQUIP_SLOT_KEYS.has(slotDeep)) {
+    requestAnimationFrame(() => {
+      document.querySelector(`.equip-slot-card[data-slot="${slotDeep}"]`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    });
   }
 }
 initArtefattiPage();

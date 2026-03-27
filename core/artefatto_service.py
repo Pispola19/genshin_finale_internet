@@ -5,17 +5,28 @@ Tutte le chiamate ai Repository per artefatti passano da qui.
 from typing import Optional, List, Tuple, Dict, Any
 
 from core.dps import DpsCalculator, build_dps_result_artefatto_index
+from core.validation import validate_artefatto_set_e_pezzo
 from core.dps_types import DpsResult, dps_result_to_message_it
-from db.connection import get_connection, get_artefatti_connection
-from db.repositories import ArtefattoRepository, PersonaggioRepository
+from config import SLOT_DB
 from db.artifact_catalog import (
     filtra_progressivo,
     lista_set,
     pezzi_catalogo_per_set_e_slot,
-    register_extra_set,
     MAIN_STATS_PER_SLOT,
     cerca_nome_pezzo,
 )
+from db.connection import get_connection, get_artefatti_connection
+from db.repositories import ArtefattoRepository, PersonaggioRepository
+
+_OTTIM_SLOT_LABEL_IT = {
+    "fiore": "Fiore",
+    "piuma": "Piuma",
+    "sabbie": "Sabbie",
+    "calice": "Calice",
+    "corona": "Corona",
+}
+# Soglia minima sull’indice contestuale (stesso `score_artefatto_per_personaggio` di Manufatti).
+_OTTIM_MIN_DELTA = 0.02
 
 
 class ArtefattoService:
@@ -240,11 +251,12 @@ class ArtefattoService:
     def aggiorna_artefatto(self, artefatto_id: int, form_values: dict) -> None:
         """Aggiorna statistiche (livello, main, sub…). Slot: solo se il pezzo non è assegnato."""
         from core.validation import parse_number
+
         ex = ArtefattoRepository.get(self._art_conn(), artefatto_id)
         if not ex:
             raise ValueError("Artefatto non trovato")
-        slot_in = (form_values.get("slot") or ex.get("slot") or "fiore").strip()
-        if ex.get("assegna_a_id") and slot_in != ex.get("slot"):
+        slot_in = (form_values.get("slot") or ex.get("slot") or "fiore").strip().lower()
+        if ex.get("assegna_a_id") and slot_in != (ex.get("slot") or "").strip().lower():
             raise ValueError(
                 "Questo pezzo è assegnato a un personaggio: non puoi cambiare lo slot. "
                 "In Manufatti imposta Personaggio su «Solo magazzino (libero)», salva, poi riapri il modulo."
@@ -267,8 +279,10 @@ class ArtefattoService:
             parse_number(form_values.get("sub4_val")),
         )
         set_n = (dati[1] or "").strip()
-        if set_n:
-            register_extra_set(set_n)
+        nome_pz = (dati[2] or "").strip()
+        ok_n, err_n = validate_artefatto_set_e_pezzo(set_n, nome_pz, slot_in)
+        if not ok_n:
+            raise ValueError(err_n)
         ArtefattoRepository.update(self._art_conn(), artefatto_id, dati)
         if "personaggio_id" in form_values:
             raw_pid = form_values.get("personaggio_id")
@@ -284,6 +298,108 @@ class ArtefattoService:
     def elimina_artefatto(self, artefatto_id: int) -> None:
         if not ArtefattoRepository.delete(self._art_conn(), artefatto_id):
             raise ValueError("Artefatto non trovato")
+
+    # --- Ottimizzazione equip vs magazzino (sola lettura, stesso DpsCalculator) ---
+    def suggerimenti_ottimizzazione_per_personaggio(self, personaggio_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Per ogni slot: confronta pezzo equipaggiato con il miglior pezzo **libero** in magazzino
+        usando ``DpsCalculator.score_artefatto_per_personaggio`` (indicatore come in Manufatti).
+        """
+        pg = PersonaggioRepository.get(self._main_conn(), personaggio_id)
+        if not pg:
+            return None
+        eq = ArtefattoRepository.equip_map_for_personaggio(self._art_conn(), personaggio_id)
+        slots_out: Dict[str, Any] = {}
+        ha_suggerimenti = False
+        for slot in SLOT_DB:
+            label_it = _OTTIM_SLOT_LABEL_IT.get(slot, slot)
+            liberi = ArtefattoRepository.lista_liberi(self._art_conn(), slot)
+            cur_id = eq.get(slot)
+            cur_art = ArtefattoRepository.get(self._art_conn(), cur_id) if cur_id else None
+            cur_score = 0.0
+            if cur_art:
+                cur_score, _ = DpsCalculator.score_artefatto_per_personaggio(cur_art, pg)
+
+            best_art: Optional[dict] = None
+            best_score = float("-inf")
+            for a in liberi:
+                sc, _ = DpsCalculator.score_artefatto_per_personaggio(a, pg)
+                if sc > best_score + 1e-9:
+                    best_score = sc
+                    best_art = a
+                elif abs(sc - best_score) <= 1e-9 and best_art is not None:
+                    if int(a["id"]) < int(best_art["id"]):
+                        best_art = a
+
+            migliorabile = False
+            best_alt_payload = None
+            delta = 0.0
+            if best_art is not None and best_score > float("-inf"):
+                if cur_art is None:
+                    if best_score > _OTTIM_MIN_DELTA:
+                        migliorabile = True
+                        delta = round(best_score, 2)
+                elif best_score >= cur_score + _OTTIM_MIN_DELTA:
+                    migliorabile = True
+                    delta = round(best_score - cur_score, 2)
+
+            if migliorabile and best_art is not None:
+                ha_suggerimenti = True
+                opt = self.artefatto_opzione_select(best_art)
+                best_alt_payload = {
+                    "id": opt["id"],
+                    "label": opt["label"],
+                    "score": round(max(best_score, 0.0), 2),
+                    "delta": delta,
+                }
+
+            cur_payload = None
+            if cur_art:
+                copt = self.artefatto_opzione_select(cur_art)
+                cur_payload = {
+                    "id": copt["id"],
+                    "label": copt["label"],
+                    "score": round(cur_score, 2),
+                }
+
+            if migliorabile:
+                msg = (
+                    f"Indice migliore in magazzino: +{delta} rispetto all’attuale."
+                    if cur_art
+                    else f"Slot vuoto: miglior indice libero ≈ {best_alt_payload['score'] if best_alt_payload else 0}."
+                )
+            elif not liberi:
+                msg = "Nessun pezzo libero in magazzino per questo slot."
+            elif cur_art is None:
+                msg = "Slot vuoto e magazzino vuoto per questo slot."
+            else:
+                msg = "L’equip è almeno pari al meglio disponibile in magazzino."
+
+            slots_out[slot] = {
+                "slot": slot,
+                "slot_label": label_it,
+                "equipped": cur_payload,
+                "migliorabile": migliorabile,
+                "best_alternative": best_alt_payload,
+                "messaggio_breve": msg,
+            }
+
+        return {
+            "personaggio_id": personaggio_id,
+            "nome": pg.nome,
+            "elemento": pg.elemento,
+            "slots": slots_out,
+            "ha_suggerimenti": ha_suggerimenti,
+        }
+
+    def suggerimenti_ottimizzazione_tutti(self) -> List[Dict[str, Any]]:
+        """Una voce per ogni personaggio salvato (sempre, anche senza suggerimenti)."""
+        out: List[Dict[str, Any]] = []
+        for pid, _nome, _livello, _elemento in PersonaggioRepository.lista(self._main_conn()):
+            row = self.suggerimenti_ottimizzazione_per_personaggio(pid)
+            if row:
+                out.append(row)
+        return out
 
     # --- Catalogo (filtraggio progressivo) ---
     def set_per_slot(self, slot: str) -> List[str]:
@@ -308,15 +424,8 @@ class ArtefattoService:
         """Lista main stats possibili per lo slot."""
         return list(MAIN_STATS_PER_SLOT.get(slot, ["HP", "ATK"]))
 
-    def cerca_artefatto_online(self, query: str) -> str:
-        """URL ricerca Hoyolab. Ritorna URL da aprire."""
-        q = (query or "").strip().replace(" ", "+")
-        if not q:
-            return "https://www.hoyolab.com/"
-        return f"https://www.hoyolab.com/search?keyword={q}"
-
     def cerca_artefatto_web(self, query: str) -> str:
-        """URL ricerca web (Google) - fallback se non su Hoyolab."""
+        """URL ricerca web (es. Google) per nome set/pezzo."""
         q = (query or "").strip().replace(" ", "+")
         if not q:
             return "https://www.google.com/search?q=Genshin+Impact+artefatti"
@@ -325,8 +434,16 @@ class ArtefattoService:
     def aggiungi_artefatto(self, form_values: dict) -> int:
         """Registra artefatto. Ritorna id."""
         from core.validation import parse_number
+
+        slot_new = (form_values.get("slot") or "fiore").strip().lower()
+        sn = (form_values.get("set_nome") or "").strip()
+        np = (form_values.get("nome") or "").strip()
+        ok_n, err_n = validate_artefatto_set_e_pezzo(sn, np, slot_new)
+        if not ok_n:
+            raise ValueError(err_n)
+
         dati = (
-            form_values.get("slot", "fiore"),
+            slot_new,
             form_values.get("set_nome", ""),
             form_values.get("nome", ""),
             parse_number(form_values.get("livello"), default=20) or 20,
@@ -342,9 +459,6 @@ class ArtefattoService:
             form_values.get("sub4_stat", ""),
             parse_number(form_values.get("sub4_val")),
         )
-        set_n = (form_values.get("set_nome") or "").strip()
-        if set_n:
-            register_extra_set(set_n)
         aid = ArtefattoRepository.insert(self._art_conn(), dati)
         raw_pid = form_values.get("personaggio_id")
         if raw_pid not in (None, "", 0, "0"):

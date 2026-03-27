@@ -5,9 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "genshin-manager"
 version = "1.0.0"
-description = "Genshin Manager — GUI Tkinter e app web Flask"
+description = "Genshin Manager — app web Flask (entry: run_web.py); modulo GUI Tk opzionale"
 requires-python = ">=3.10"
 dependencies = [
+    "certifi>=2023.0.0",
     "flask>=2.0.0",
     "gunicorn>=21.0.0",
     "pillow>=9.0.0",

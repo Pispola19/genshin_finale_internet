@@ -12,13 +12,12 @@
     <div class="nav-pages">
       <a href="personaggio.html" class="active">Personaggio</a>
       <a href="artefatti.html">Manufatti</a>
+      <a href="ottimizzazione.html">Ottimizzazione</a>
       <a href="build.html">Build Analysis</a>
       <a href="rotation.html">Rotazione</a>
       <a href="team.html">Team Builder</a>
       <a href="dashboard.html">Dashboard</a>
-      <a href="#import" class="nav-import" id="navImportLink">Import</a>
       <a href="istruzioni.html">Come si usa</a>
-      <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
     </div>
   </nav>
 
@@ -31,6 +30,10 @@
     <main class="personaggio-main">
       <div class="section section-autocomplete">
         <h2>🔍 Seleziona Personaggio</h2>
+        <div class="form-row" style="margin-bottom:0.45rem;align-items:center">
+          <button type="button" class="btn btn-secondary btn-compact" id="btnOnlySavedPg" aria-pressed="false">Solo salvati</button>
+          <span class="page-hint" style="margin:0">Filtra elenco a DB</span>
+        </div>
         <div class="form-row">
           <div class="autocomplete-wrap">
             <input type="text" id="searchPersonaggio" placeholder="Cerca nome o apri l’elenco…" autocomplete="off">
@@ -39,12 +42,13 @@
         </div>
       </div>
 
-      <div class="section">
+      <div class="section section-identita section-identita-personaggio">
         <h2>Dati base</h2>
         <div class="form-row">
           <div class="form-group">
             <label>Nome</label>
-            <input type="text" id="nome" placeholder="Nome">
+            <input type="text" id="nome" list="datalist_catalogo_pg" aria-label="Nome personaggio" placeholder="Scrivi o scegli dai suggerimenti…" autocomplete="off">
+            <datalist id="datalist_catalogo_pg"></datalist>
           </div>
           <div class="form-group">
             <label>Livello</label>
@@ -75,7 +79,7 @@
         </div>
       </div>
 
-      <div class="section">
+      <div class="section section-identita section-identita-arma">
         <h2>Arma</h2>
         <div class="table-scroll">
         <table class="arma-table">
@@ -85,7 +89,10 @@
             <th title="Substat dell’arma (es. CR%, ER…)" colspan="2">Stat secondaria</th>
           </tr>
           <tr>
-            <td><input type="text" id="arma_nome" placeholder="Nome arma"></td>
+            <td>
+              <input type="text" id="arma_nome" list="datalist_catalogo_armi" aria-label="Nome arma" placeholder="Scrivi o scegli dai suggerimenti…" autocomplete="off" style="min-width:10rem">
+              <datalist id="datalist_catalogo_armi"></datalist>
+            </td>
             <td>
               <select id="arma_tipo">
                 <option>Claymore</option><option>Spada</option><option>Arco</option>
@@ -109,28 +116,28 @@
         <div class="artefatti-grid manufatti-grid" aria-label="Manufatti equipaggiati (sola lettura)">
           <div class="art-slot art-slot-readonly">
             <h3>Fiore</h3>
-            <div id="art_fiore" class="art-content"><span class="art-empty">Nessun manufatto</span></div>
+            <div id="art_fiore" class="art-content"><span class="art-empty">Nessun manufatto. Vai in <a href="artefatti.html#equip">Manufatti → Equip personaggio</a> per assegnare i pezzi.</span></div>
           </div>
           <div class="art-slot art-slot-readonly">
             <h3>Piuma</h3>
-            <div id="art_piuma" class="art-content"><span class="art-empty">Nessun manufatto</span></div>
+            <div id="art_piuma" class="art-content"><span class="art-empty">Nessun manufatto. Vai in <a href="artefatti.html#equip">Manufatti → Equip personaggio</a> per assegnare i pezzi.</span></div>
           </div>
           <div class="art-slot art-slot-readonly">
             <h3>Sabbie</h3>
-            <div id="art_sabbie" class="art-content"><span class="art-empty">Nessun manufatto</span></div>
+            <div id="art_sabbie" class="art-content"><span class="art-empty">Nessun manufatto. Vai in <a href="artefatti.html#equip">Manufatti → Equip personaggio</a> per assegnare i pezzi.</span></div>
           </div>
           <div class="art-slot art-slot-readonly">
             <h3>Calice</h3>
-            <div id="art_calice" class="art-content"><span class="art-empty">Nessun manufatto</span></div>
+            <div id="art_calice" class="art-content"><span class="art-empty">Nessun manufatto. Vai in <a href="artefatti.html#equip">Manufatti → Equip personaggio</a> per assegnare i pezzi.</span></div>
           </div>
           <div class="art-slot art-slot-readonly">
             <h3>Corona</h3>
-            <div id="art_corona" class="art-content"><span class="art-empty">Nessun manufatto</span></div>
+            <div id="art_corona" class="art-content"><span class="art-empty">Nessun manufatto. Vai in <a href="artefatti.html#equip">Manufatti → Equip personaggio</a> per assegnare i pezzi.</span></div>
           </div>
         </div>
       </div>
 
-      <div class="section">
+      <div class="section section-talenti-costellazioni">
         <h2>Costellazioni e talenti</h2>
         <p class="page-hint">Costellazioni: <strong>0</strong> = non attiva, <strong>1</strong> = attiva. Talenti: <strong>-</strong> (vuoto), <strong>0</strong> o <strong>1–10</strong> (livello). Prime tre: AA, E, Q. Extra 1–4: <strong>non nel calcolo DPS</strong> (solo appunti).</p>
         <div class="form-row talenti-cost-row">
@@ -160,35 +167,6 @@
       </div>
     </main>
 
-  </div>
-
-  <div id="importBackdrop" class="modal-backdrop" hidden>
-    <div class="modal-panel modal-panel-import" role="dialog" aria-labelledby="importTitle">
-      <button type="button" class="modal-close" id="importClose" aria-label="Chiudi">&times;</button>
-      <h2 id="importTitle">Import da copia (JSON)</h2>
-      <p class="modal-hint">Incolla la risposta JSON da DevTools (Rete) o il formato descritto nella documentazione. Nessun login HoYoLAB.</p>
-      <label class="import-label" for="importRaw">JSON / testo</label>
-      <textarea id="importRaw" class="import-textarea" rows="12" spellcheck="false" placeholder='Incolla qui…'></textarea>
-      <div class="form-group import-mode-wrap">
-        <label for="importMode">Manufatti HoYoLab</label>
-        <select id="importMode" class="import-mode-select">
-          <option value="replace">Sostituisci equip (rimuove i pezzi attuali sul personaggio)</option>
-          <option value="update" selected>Unisci per slot (non cancella altri pezzi; stat vuote HoYo → restano quelle salvate)</option>
-          <option value="append_dedup">Solo magazzino (dedup: evita duplicati identici) / storico</option>
-          <option value="append_force">Solo magazzino (force: permette duplicati) / storico</option>
-        </select>
-      </div>
-      <div class="form-group import-choice-wrap" id="importChoiceWrap" hidden>
-        <label for="importChoiceNome">Personaggio nel JSON (più di uno)</label>
-        <select id="importChoiceNome"></select>
-      </div>
-      <pre id="importPreview" class="import-preview" hidden></pre>
-      <div class="btn-group import-modal-actions">
-        <button type="button" class="btn btn-secondary" id="importPreviewBtn">Anteprima</button>
-        <button type="button" class="btn btn-primary" id="importNewBtn">Importa come nuovo</button>
-        <button type="button" class="btn btn-primary" id="importUpdateBtn">Aggiorna scheda corrente</button>
-      </div>
-    </div>
   </div>
 
   <div id="listaPgBackdrop" class="modal-backdrop" hidden>

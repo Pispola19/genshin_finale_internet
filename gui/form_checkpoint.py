@@ -217,7 +217,7 @@ def apply_gui_state(app: Any, state: dict) -> None:
         app._set_entry(e, str(v)[:_MAX_LEN_FIELD])
 
     ar = state.get("arma") or {}
-    app._set_entry(app.arma_nome_entry, str(ar.get("nome", ""))[:_MAX_LEN_NOME])
+    app.arma_nome_entry.set(str(ar.get("nome", ""))[:_MAX_LEN_NOME])
     app.tipo_var.set(str(ar.get("tipo", "") or "Spada")[:_MAX_LEN_FIELD])
     app._set_entry(app.arma_liv_entry, ar.get("livello", ""))
     app._set_entry(app.arma_stelle_entry, ar.get("stelle", ""))
@@ -283,9 +283,14 @@ def load_and_apply_gui_checkpoint(app: Any) -> bool:
         _delete_corrupt_checkpoint_files(path)
         return False
     try:
-        nomi = app.service.nomi_per_autocomplete()
-        app.nome_combo["values"] = nomi
-        app.nome_combo._values = nomi
+        if hasattr(app, "_refresh_nome_armi_combos"):
+            nv = app.nome_var.get() if getattr(app, "nome_var", None) else ""
+            av = app.arma_nome_entry.get() if getattr(app, "arma_nome_entry", None) else ""
+            app._refresh_nome_armi_combos(nome_extra=nv or "", arma_extra=av or "")
+        else:
+            nomi = app.service.nomi_per_autocomplete()
+            app.nome_combo["values"] = nomi
+            app.nome_combo._values = nomi
     except Exception:
         logger.exception("refresh autocomplete after checkpoint")
     return True

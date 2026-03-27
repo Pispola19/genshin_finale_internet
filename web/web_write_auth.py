@@ -1,8 +1,11 @@
 """
-Protezione scritture web: se è impostata GENSHIN_WEB_WRITE_PASSWORD nel server,
-solo le sessioni autenticate possono salvare / importare / eliminare.
+Autenticazione sessione web (single-user protetta): una sola password condivisa.
 
-La password non va mai nel JavaScript: solo cookie di sessione HttpOnly dopo POST /api/auth/login.
+- **Locale**: se ``GENSHIN_WEB_WRITE_PASSWORD`` non è impostata, le API dati sono accessibili senza login
+  (nessun cookie richiesto). Su Render / se ``GENSHIN_WEB_FORCE_PASSWORD=1``, la password è obbligatoria
+  all’avvio del server (vedi ``web.app``).
+- Con password configurata, serve **lettura e scrittura** tramite sessione valida.
+- La password non va nel JavaScript: cookie HttpOnly dopo ``POST /api/auth/login``.
 """
 from __future__ import annotations
 
@@ -18,19 +21,18 @@ SESSION_WRITE_KEY = "gm_web_write"
 
 
 def write_password_configured() -> bool:
+    """True se è impostata una password non vuota (sessione richiesta per le API)."""
     return len((os.environ.get("GENSHIN_WEB_WRITE_PASSWORD") or "").strip()) > 0
 
 
 def session_write_ok() -> bool:
-    if not write_password_configured():
-        return True
     return session.get(SESSION_WRITE_KEY) is True
 
 
 def password_matches(attempt: str) -> bool:
-    exp = os.environ.get("GENSHIN_WEB_WRITE_PASSWORD") or ""
+    exp = (os.environ.get("GENSHIN_WEB_WRITE_PASSWORD") or "").strip()
     if not exp:
-        return True
+        return False
     a = (attempt or "").encode("utf-8")
     b = exp.encode("utf-8")
     if len(a) != len(b):
@@ -38,8 +40,8 @@ def password_matches(attempt: str) -> bool:
     return hmac.compare_digest(a, b)
 
 
-def gate_write() -> Optional[Tuple[Any, int]]:
-    """None se la richiesta può procedere; altrimenti (jsonify(...), 401)."""
+def gate_web_session() -> Optional[Tuple[Any, int]]:
+    """None se la sessione è autenticata; altrimenti (jsonify(...), 401)."""
     if not write_password_configured():
         return None
     if session_write_ok():
@@ -47,7 +49,7 @@ def gate_write() -> Optional[Tuple[Any, int]]:
     return (
         jsonify(
             {
-                "error": "Accesso negato: accedi dalla pagina Login (password impostata sul server).",
+                "error": "Accesso negato: accedi dalla pagina Login.",
                 "code": "auth_required",
             }
         ),
@@ -55,12 +57,19 @@ def gate_write() -> Optional[Tuple[Any, int]]:
     )
 
 
-def require_write_auth(f: Callable) -> Callable:
+# Alias per compatibilità con codice esistente
+gate_write = gate_web_session
+
+
+def require_web_auth(f: Callable) -> Callable:
     @wraps(f)
     def wrapped(*args, **kwargs):
-        denied = gate_write()
+        denied = gate_web_session()
         if denied:
             return denied
         return f(*args, **kwargs)
 
     return wrapped
+
+
+require_write_auth = require_web_auth

@@ -1,8 +1,8 @@
 """
 Reset totale dei database locali (SQLite) del progetto.
 
-Obiettivo: ripartire da DB vuoti, pronti per import nuovi dati.
-- Fa backup dei file DB (e import log) con timestamp
+Obiettivo: ripartire da DB vuoti (schema invariato), pronti per inserimento manuale.
+- Fa backup dei file DB con timestamp
 - Elimina i file originali
 - Reinizializza lo schema tramite db.connection.init_databases
 
@@ -68,12 +68,11 @@ def _human(p: Path) -> str:
 
 def _collect_targets() -> List[TargetFile]:
     # Import locali per rispettare GINSHIN_DATA_DIR.
-    from config import ARTEFATTI_DB_PATH, DB_PATH, IMPORT_LOG_PATH
+    from config import ARTEFATTI_DB_PATH, DB_PATH
 
     files: List[TargetFile] = [
         TargetFile("db_main", Path(DB_PATH)),
         TargetFile("db_artefatti", Path(ARTEFATTI_DB_PATH)),
-        TargetFile("import_log", Path(IMPORT_LOG_PATH)),
     ]
     return files
 
@@ -171,7 +170,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     if ns.dry_run:
         print("\n(dry-run: nessuna modifica eseguita)")
     else:
-        print("\nOK: database reinizializzati e pronti per nuovi import.")
+        print("\nOK: database reinizializzati e pronti per dati manuali.")
     return 0
 
 

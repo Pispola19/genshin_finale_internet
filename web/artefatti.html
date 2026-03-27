@@ -12,13 +12,13 @@
     <div class="nav-pages">
       <a href="personaggio.html">Personaggio</a>
       <a href="artefatti.html" class="active">Manufatti</a>
+      <a href="ottimizzazione.html">Ottimizzazione</a>
       <a href="build.html">Build Analysis</a>
       <a href="rotation.html">Rotazione</a>
       <a href="team.html">Team Builder</a>
       <a href="dashboard.html">Dashboard</a>
-      <a href="personaggio.html#import" class="nav-import">Import</a>
       <a href="istruzioni.html">Come si usa</a>
-      <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
+      <a href="https://www.hoyolab.com/home" class="nav-login nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
     </div>
   </nav>
 
@@ -30,9 +30,9 @@
   <main class="inv-page">
     <header class="inv-hero section">
       <h1 class="inv-hero-title">Inventario manufatti</h1>
-      <p class="inv-hero-lead page-hint" style="max-width: 46rem; margin-top: 0.35rem;">
-        <strong>Archivio</strong> — crei e modifichi ogni pezzo (set, main, sub, livello). <strong>Equip</strong> — assegni i cinque slot al personaggio senza passare dal modulo lungo: solo scelte rapide dal magazzino.
-        La scheda <a href="personaggio.html">Personaggio</a> mostra l’equip in <strong>sola lettura</strong>.
+      <p class="inv-hero-lead page-hint" style="max-width: 44rem; margin-top: 0.35rem;">
+        <strong>Archivio:</strong> crea e modifica i pezzi. <strong>Equip:</strong> assegna i 5 slot dal magazzino.
+        In <a href="personaggio.html">Personaggio</a> l’equip è in sola lettura.
       </p>
     </header>
 
@@ -44,11 +44,11 @@
     <div id="invPanelArchivio" class="inv-panel" role="tabpanel" aria-labelledby="invTabArchivio">
     <div class="section inv-archivio-intro">
       <h2 class="inv-section-kicker">Archivio</h2>
-      <p class="page-hint page-hint-oneline">Qui il <strong>database</strong> dei pezzi: aggiungi, modifica dalla tabella, filtri. L’assegnazione “da modulo” resta nel riquadro blu sotto; per solo-slot usa la tab <strong>Equip</strong>.</p>
+      <p class="page-hint page-hint-oneline">Tabella pezzi, filtri e modulo sotto. Per assegnare solo gli slot usa la tab <strong>Equip</strong>.</p>
     </div>
 
-    <div class="section inv-add-form" id="section-form-manufatto">
-      <h2>➕ Registra o modifica pezzo</h2>
+    <div class="section inv-add-form inv-block-create" id="section-form-manufatto">
+      <h2>➕ Crea nuovo manufatto</h2>
       <p id="formModuloBanner" class="page-hint" hidden style="margin-bottom:0.75rem">Stai modificando il manufatto <strong>#<span id="formModuloId"></span></strong>. Salva per applicare, <strong>Annulla</strong> per tornare a nuovo pezzo.</p>
       <p style="color:var(--text-muted);margin-bottom:1rem;font-size:0.92rem">Pezzo sopra, assegnazione nel riquadro blu. <strong>AGGIUNGI</strong> / riga → <strong>Carica nel modulo</strong> → <strong>SALVA MODIFICHE</strong>.</p>
       <p id="slotLockedHint" class="page-hint" hidden style="margin-bottom:0.75rem">Questo pezzo è <strong>equipaggiato</strong>: non puoi cambiare <em>slot</em> finché è su un personaggio. Per liberarlo, nel riquadro sotto scegli <strong>Solo magazzino (libero)</strong> e salva; poi potrai cambiare slot se serve.</p>
@@ -74,31 +74,16 @@
       </div>
       <div class="form-row inv-set-dual-row">
         <div class="form-group form-group-stack form-group-grow inv-set-col-catalogo">
-          <label for="set_nome">Set (catalogo)</label>
+          <label for="set_nome">Set (catalogo ufficiale)</label>
           <select id="set_nome" class="inv-set-select"><option value="">— Scegli set —</option></select>
-        </div>
-        <div class="form-group form-group-stack form-group-grow inv-set-col-libero">
-          <input
-            type="text"
-            id="set_nome_custom"
-            class="inv-input-full inv-set-free-input"
-            autocomplete="off"
-            placeholder="Opzionale se non in elenco"
-            title="Facoltativo: compila solo se il set non è nel menu; altrimenti lascia vuoto e usa il catalogo"
-            aria-label="Nome set opzionale a mano libera; se compilato ha priorità sul menu Scegli set"
-          >
         </div>
       </div>
       <p class="page-hint" style="margin:0 0 0.65rem;font-size:0.82rem">
-        <strong>Set:</strong> menu catalogo e casella libera a fianco — spiegazione in <a href="istruzioni.html#manufatti-set-compilare">Come si usa</a>.
+        <strong>Set e pezzo:</strong> solo voci del catalogo interno (allineate al gioco). Dettagli in <a href="istruzioni.html#manufatti-set-compilare">Come si usa</a>.
       </p>
       <div class="form-group form-group-stack">
         <label for="nome_pezzo">Nome pezzo</label>
         <select id="nome_pezzo" class="inv-set-select"><option value="">— Scegli prima il set —</option></select>
-      </div>
-      <div class="form-group form-group-stack" id="nome_custom_wrap" hidden>
-        <label for="nome_custom">Nome personalizzato</label>
-        <input type="text" id="nome_custom" class="inv-input-full" placeholder="Se non è in elenco o vuoi un’etichetta diversa" autocomplete="off">
       </div>
       <div class="form-row inv-main-row">
         <div class="form-group form-group-main">
@@ -120,7 +105,7 @@
         </div>
       </div>
       <div class="section-assegnazione-unica">
-        <h3 class="assegnazione-titolo">Assegnazione al personaggio</h3>
+        <h3 class="assegnazione-titolo">Assegna al personaggio</h3>
         <p class="page-hint" style="margin:0 0 0.5rem;font-size:0.82rem"><strong>Unico punto</strong> per equip su scheda salvata. <strong>Solo magazzino</strong> = libero; altrimenti slot del modulo. <a href="istruzioni.html#manufatti-magazzino">Guida</a></p>
         <div class="form-group form-group-stack">
           <label for="assegn_a_personaggio">Personaggio</label>
@@ -136,8 +121,8 @@
       </div>
     </div>
 
-    <div class="section">
-      <h2>Catalogo archivio</h2>
+    <div class="section inv-block-magazzino">
+      <h2>Magazzino</h2>
       <p class="page-hint" style="margin:0 0 0.45rem;font-size:0.86rem">Riga → <strong>Carica nel modulo</strong>; resto riga → suggerimenti. Filtri: <a href="istruzioni.html#filtri-inventario-manufatti">Come si usa</a>.</p>
       <div class="magazzino-filtri-wrap">
         <button type="button" class="btn btn-secondary btn-filtri-toggle" id="btnToggleFiltriMagazzino" aria-expanded="false" aria-controls="magazzinoFiltriPanel">Mostra filtri inventario</button>
@@ -199,7 +184,7 @@
     </div>
 
     <div id="invPanelEquip" class="inv-panel" role="tabpanel" aria-labelledby="invTabEquip" hidden>
-      <div class="section equip-intro">
+      <div class="section equip-intro inv-block-assegna">
         <h2 class="inv-section-kicker">Equip</h2>
         <p class="page-hint" style="max-width: 44rem;">Personaggio salvato → per ogni slot (Fiore … Corona) vedi cosa c’è ora e scegli un pezzo <strong>libero</strong> dello stesso tipo o <strong>libera slot</strong>. I pezzi nuovi si creano in <strong>Archivio</strong>.</p>
         <div class="equip-toolbar">

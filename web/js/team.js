@@ -22,11 +22,27 @@ let slotInModifica = null;
 
 // Load personaggi
 async function loadPersonaggi() {
-  const r = await fetch(`${API}/teams`);
-  personaggiList = await r.json();
+  try {
+    const r = await fetch(`${API}/teams`);
+    personaggiList = await r.json();
+    if (!Array.isArray(personaggiList)) personaggiList = [];
+  } catch {
+    personaggiList = [];
+  }
+}
+
+function renderEmptyTeamState() {
+  teamPower.textContent = "—";
+  sinergie.innerHTML = "<li>Seleziona un personaggio per iniziare.</li>";
+  topTeams.innerHTML =
+    '<div class="top-team"><span class="chars">Nessuna build disponibile. Salva almeno un personaggio e riprova.</span></div>';
 }
 
 function apriModal(slotIndex) {
+  if (!personaggiList.length) {
+    renderEmptyTeamState();
+    return;
+  }
   slotInModifica = slotIndex;
   modal.style.display = "flex";
   listaPersonaggiModal.innerHTML = personaggiList.map(p => {
@@ -109,7 +125,7 @@ async function calcolaTeams() {
   const data = await r.json();
 
   if (!data.teams || data.teams.length === 0) {
-    topTeams.innerHTML = `<div class="top-team"><span class="chars">${data.message || "Nessun team"}</span></div>`;
+    topTeams.innerHTML = `<div class="top-team"><span class="chars">${data.message || "Nessun team disponibile"}</span></div>`;
     return;
   }
 
@@ -125,7 +141,7 @@ async function calcolaTeams() {
 function ottimizza() {
   const firstTeam = topTeams.querySelector(".top-team");
   if (!firstTeam) {
-    alert("Calcola prima i team.");
+    alert("Calcola prima il team.");
     return;
   }
   const chars = firstTeam.querySelector(".chars").textContent;
@@ -149,7 +165,7 @@ function salva() {
     return;
   }
   // Salvataggio team: per ora solo alert (non c'è tabella teams nel DB)
-  alert("Salvataggio team: da implementare backend (tabella teams).");
+  alert("Salvataggio team non ancora disponibile.");
 }
 
 btnCalcola.addEventListener("click", () => {
@@ -161,4 +177,10 @@ btnOttimizza.addEventListener("click", ottimizza);
 btnSalva.addEventListener("click", salva);
 
 // Init
-loadPersonaggi().then(renderSlots);
+loadPersonaggi().then(() => {
+  if (!personaggiList.length) {
+    renderEmptyTeamState();
+    return;
+  }
+  renderSlots();
+});

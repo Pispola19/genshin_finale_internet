@@ -134,77 +134,6 @@ def _somma_stats(artefatti: List[dict]) -> dict:
     return {"atk": round(atk, 1), "cr": round(cr, 1), "cd": round(cd, 1), "er": round(er, 1), "em": round(em, 1)}
 
 
-def _artefatto_missing_stats_for_dps(a: Optional[dict]) -> bool:
-    """
-    Flag qualità per DPS: True se il pezzo è incompleto (main mancante o sub tutte vuote).
-    Non blocca il calcolo: serve solo per warning e trasparenza.
-    """
-    if not a:
-        return True
-    main_stat = (a.get("main_stat") or "").strip()
-    main_val = a.get("main_val")
-    if not main_stat or main_val in (None, ""):
-        return True
-    subs_any = False
-    for i in range(1, 5):
-        st = (a.get(f"sub{i}_stat") or "").strip()
-        val = a.get(f"sub{i}_val")
-        if st and val not in (None, ""):
-            subs_any = True
-            break
-    return not subs_any
-
-
-def _dps_quality_for_build(pg, arma: Any, eq_ids: Dict[str, int], artefatti_attuali: List[dict]) -> dict:
-    """
-    Controllo qualità pre-DPS (non bloccante).
-    - ready: nessun warning critico (equip completo + dati pezzi presenti)
-    - warnings_it: elenco stringhe per UI/API
-    """
-    warnings: List[str] = []
-    missing_slots = [s for s in SLOT_DB if not (eq_ids or {}).get(s)]
-    if missing_slots:
-        labels = ", ".join(_SLOT_LABEL_IT.get(s, s) for s in missing_slots)
-        warnings.append(f"Build incompleta: slot mancanti ({labels}). DPS/Proxy meno affidabili.")
-
-    arma_nome = ""
-    try:
-        arma_nome = str(getattr(arma, "nome", "") or "")
-    except Exception:
-        arma_nome = ""
-    if not arma_nome.strip():
-        warnings.append("Arma mancante o vuota: il Proxy danno può essere sottostimato.")
-
-    n_incomplete = 0
-    for a in artefatti_attuali:
-        ms = _artefatto_missing_stats_for_dps(a)
-        a["missing_stats"] = bool(ms)
-        if ms:
-            n_incomplete += 1
-    if n_incomplete:
-        warnings.append(
-            f"⚠ {n_incomplete} manufatti con stat incomplete (main/sub mancanti): DPS non affidabile."
-        )
-
-    ready = (not missing_slots) and (n_incomplete == 0)
-    if ready:
-        status_badge_it = "DPS affidabile"
-        summary_it = (
-            "Equip completo e manufatti con statistiche sufficienti per il calcolo DPS."
-        )
-    else:
-        status_badge_it = "DPS non affidabile"
-        summary_it = "; ".join(warnings) if warnings else "Dati build incompleti."
-    return {
-        "ready": bool(ready),
-        "status_badge_it": status_badge_it,
-        "summary_it": summary_it,
-        "warnings_it": warnings,
-        "missing_slots": len(missing_slots),
-        "incomplete_relics": n_incomplete,
-    }
-
-
 def _confronto_slot_attuale_ottimale(riep_curr: dict, riep_opt: dict) -> dict:
     """Per ogni slot: stesso pezzo o cambio (per UX confronto)."""
     by_curr = {s["slot_key"]: s for s in riep_curr.get("slots", []) if s.get("slot_key")}
@@ -309,15 +238,27 @@ class BuildService:
         riepilogo_ottimale = _riepilogo_build_slots(slot_opt)
 
         arma = self._pg.get_arma(personaggio_id)
-        dps_quality = _dps_quality_for_build(pg, arma, eq_ids, artefatti_attuali)
         combat_att = build_full_combat_view(pg, arma, artefatti_attuali)
         combat_opt = build_full_combat_view(pg, arma, ottimali)
 
         confronto_slot = _confronto_slot_attuale_ottimale(riepilogo_attuale, riepilogo_ottimale)
 
+        n_eq = len(artefatti_attuali)
+        dps_quality = {
+            "ready": n_eq >= 5,
+            "warnings_it": []
+            if n_eq >= 5
+            else ["Build incompleta: servono 5 manufatti equipaggiati per un DPS indicativo affidabile."],
+            "status_badge_it": "OK" if n_eq >= 5 else "ATTENZIONE",
+            "summary_it": (
+                "Build pronta per il proxy DPS."
+                if n_eq >= 5
+                else f"Proxy DPS parziale: solo {n_eq}/5 slot compilati."
+            ),
+        }
+
         return {
             "personaggio": {"id": pg.id, "nome": pg.nome, "elemento": pg.elemento},
-            "dps_quality": dps_quality,
             "build_attuale": {
                 **stats_attuali,
                 "dps": dps_attuale,
@@ -366,4 +307,5 @@ class BuildService:
                 },
             },
             "artefatti_disponibili": artefatti_tabella,
+            "dps_quality": dps_quality,
         }

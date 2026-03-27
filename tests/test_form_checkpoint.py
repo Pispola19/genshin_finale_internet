@@ -10,7 +10,7 @@ class TestFormCheckpoint(unittest.TestCase):
         st = {
             "version": fc.CHECKPOINT_VERSION,
             "selected_id": None,
-            "personaggio": {"nome": "A", "livello": "1", "elemento": "Pyro"},
+            "personaggio": {"nome": "Aether", "livello": "1", "elemento": "Pyro"},
             "arma": {"nome": "", "tipo": "Spada"},
             "costellazioni": {f"c{i}": "0" for i in range(1, 7)},
             "talenti": {k: "-" for k in fc._TALENT_KEYS},
@@ -24,7 +24,7 @@ class TestFormCheckpoint(unittest.TestCase):
         st = {
             "version": fc.CHECKPOINT_VERSION,
             "selected_id": None,
-            "personaggio": {"nome": "A", "livello": "1", "elemento": "Pyro"},
+            "personaggio": {"nome": "Aether", "livello": "1", "elemento": "Pyro"},
             "arma": {},
             "costellazioni": {f"c{i}": "0" for i in range(1, 7)},
             "talenti": {k: "-" for k in fc._TALENT_KEYS},

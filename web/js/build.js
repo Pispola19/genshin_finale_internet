@@ -12,10 +12,8 @@ const API = apiBase();
 let currentPersonaggioId = null;
 let lastBuildData = null;
 let personaggiList = [];
-let catalogoNomi = [];
 
 const searchPersonaggio = document.getElementById("searchPersonaggio");
-const autocompleteList = document.getElementById("autocompleteList");
 const buildSelectionHint = document.getElementById("buildSelectionHint");
 const curr_atk = document.getElementById("curr_atk");
 const curr_crcd = document.getElementById("curr_crcd");
@@ -62,35 +60,30 @@ async function load_personaggi() {
   }
 }
 
-async function load_catalogo_nomi() {
-  try {
-    const r = await fetch(`${API}/personaggi/catalogo-nomi`);
-    const j = JSON.parse(await r.text());
-    catalogoNomi = Array.isArray(j.nomi) ? j.nomi : [];
-  } catch {
-    try {
-      const r2 = await fetch(`${API}/autocomplete`);
-      const arr = await r2.json();
-      catalogoNomi = Array.isArray(arr) ? arr : [];
-    } catch {
-      catalogoNomi = [];
-    }
+function fill_pg_select() {
+  if (!searchPersonaggio) return;
+  const prev = searchPersonaggio.value;
+  searchPersonaggio.replaceChildren();
+  const o0 = document.createElement("option");
+  o0.value = "";
+  o0.textContent = "— Scegli personaggio salvato —";
+  searchPersonaggio.appendChild(o0);
+  const sorted = [...personaggiList].sort((a, b) =>
+    String(a.nome || "").localeCompare(String(b.nome || ""), "it")
+  );
+  for (const p of sorted) {
+    const o = document.createElement("option");
+    o.value = String(p.id);
+    o.textContent = `${p.nome} — Lv.${p.livello} (${p.elemento || "—"})`;
+    searchPersonaggio.appendChild(o);
   }
+  if (prev && [...searchPersonaggio.options].some((x) => x.value === prev)) searchPersonaggio.value = prev;
 }
 
-function id_salvato_per_nome(nome_str) {
-  const p = personaggiList.find(x => (x.nome || "") === nome_str);
-  return p ? p.id : null;
-}
-
-function suggestions_nome_personaggio(query) {
-  const q = (query || "").toLowerCase().trim();
-  let names = catalogoNomi.length ? catalogoNomi : [...new Set(personaggiList.map(p => p.nome).filter(Boolean))];
-  if (q) names = names.filter(n => (n || "").toLowerCase().includes(q));
-  return names.map(nome_str => {
-    const id = id_salvato_per_nome(nome_str);
-    return { nome: nome_str, id, salvato: id != null };
-  });
+function sync_pg_id_from_select() {
+  const v = searchPersonaggio && searchPersonaggio.value ? String(searchPersonaggio.value).trim() : "";
+  currentPersonaggioId = v ? parseInt(v, 10) : null;
+  if (v && (currentPersonaggioId == null || Number.isNaN(currentPersonaggioId))) currentPersonaggioId = null;
 }
 
 function render_dps_quality_banner(q) {
@@ -295,72 +288,30 @@ function clear_build_results() {
   if (buildSetImpactLines) buildSetImpactLines.innerHTML = "";
   lastBuildData = null;
   tabella_artefatti.innerHTML =
-    '<tr><td colspan="5" style="text-align:center;color:#94a3b8">Seleziona un personaggio <strong>salvato</strong> e premi Calcola</td></tr>';
+    '<tr><td colspan="5" style="text-align:center;color:#94a3b8">Seleziona un personaggio per iniziare.</td></tr>';
 }
 
-function show_autocomplete(suggestions) {
-  autocompleteList.innerHTML = "";
-  if (suggestions.length === 0) {
-    autocompleteList.style.display = "none";
-    return;
+searchPersonaggio?.addEventListener("change", () => {
+  sync_pg_id_from_select();
+  if (currentPersonaggioId) {
+    if (buildSelectionHint) buildSelectionHint.textContent = "Calcolo build…";
+    void calcola_build();
+  } else {
+    clear_build_results();
+    if (buildSelectionHint) buildSelectionHint.textContent = "";
   }
-  suggestions.forEach(s => {
-    const li = document.createElement("li");
-    li.className = "autocomplete-row";
-    const name_span = document.createElement("span");
-    name_span.className = "autocomplete-name";
-    name_span.textContent = s.nome;
-    li.appendChild(name_span);
-    const tag = document.createElement("span");
-    tag.className = "autocomplete-tag " + (s.salvato ? "autocomplete-tag-salvato" : "autocomplete-tag-nuovo");
-    tag.textContent = s.salvato ? "Salvato" : "Da salvare";
-    li.appendChild(tag);
-    li.addEventListener("click", () => {
-      searchPersonaggio.value = s.nome;
-      autocompleteList.style.display = "none";
-      if (s.id != null) {
-        currentPersonaggioId = s.id;
-        if (buildSelectionHint) {
-          buildSelectionHint.textContent = `Scheda salvata: ${s.nome} — puoi usare «Calcola build».`;
-        }
-        calcola_build();
-      } else {
-        currentPersonaggioId = null;
-        clear_build_results();
-        if (buildSelectionHint) {
-          buildSelectionHint.textContent =
-            `«${s.nome}» non è ancora salvato. Vai su Personaggio & Inventario, scegli lo stesso nome (Nuovo), compila e Salva — poi torna qui per il calcolo.`;
-        }
-      }
-    });
-    autocompleteList.appendChild(li);
-  });
-  autocompleteList.style.display = "block";
-}
-
-function refresh_nome_autocomplete() {
-  show_autocomplete(suggestions_nome_personaggio(searchPersonaggio.value));
-}
-
-searchPersonaggio.addEventListener("input", refresh_nome_autocomplete);
-searchPersonaggio.addEventListener("focus", refresh_nome_autocomplete);
-
-document.addEventListener("click", e => {
-  const in_search = e.target === searchPersonaggio || autocompleteList.contains(e.target);
-  if (!in_search) autocompleteList.style.display = "none";
 });
 
 async function calcola_build() {
+  sync_pg_id_from_select();
   if (!currentPersonaggioId) {
-    alert(
-      "Serve un personaggio salvato in database. Cerca il nome: se compare «Salvato» puoi calcolare; se «Non in build» crea prima la scheda da Personaggio & Inventario."
-    );
+    alert("Seleziona un personaggio salvato per iniziare.");
     return;
   }
   const r = await fetch(`${API}/build/${currentPersonaggioId}`);
   if (!r.ok) {
     const err = await r.json().catch(() => ({}));
-    alert(err.error || "Errore");
+    alert(err.error || "Errore durante il calcolo della build.");
     return;
   }
   lastBuildData = await r.json();
@@ -432,7 +383,7 @@ function render_build(data) {
 
   const arts = data.artefatti_disponibili || [];
   if (arts.length === 0) {
-    tabella_artefatti.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8">Nessun artefatto</td></tr>';
+    tabella_artefatti.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8">Nessun pezzo disponibile in magazzino.</td></tr>';
   } else {
     tabella_artefatti.innerHTML = arts.map(a =>
       `<tr><td>${escape_html(a.slot || "—")}</td><td>${escape_html(a.set || "—")}</td><td>${escape_html(a.main || "—")}</td><td>${escape_html(a.val ?? "—")}</td><td>${escape_html(a.score ?? "—")}</td></tr>`
@@ -442,9 +393,7 @@ function render_build(data) {
 
 function applica() {
   alert(
-    "L’equip ottimale non si applica in automatico: ogni pezzo va assegnato a mano in Manufatti " +
-      "(Carica nel modulo sul pezzo libero, scegli il personaggio nel riquadro blu, SALVA MODIFICHE). " +
-      "La Build serve solo a confrontare numeri."
+    "Questa pagina mostra solo il confronto. Per applicare i cambi vai in Manufatti → Equip personaggio."
   );
 }
 
@@ -482,6 +431,16 @@ btn_applica.addEventListener("click", applica);
 btn_confronta.addEventListener("click", confronta);
 
 async function init_build_page() {
-  await Promise.all([load_personaggi(), load_catalogo_nomi()]);
+  await load_personaggi();
+  fill_pg_select();
+  if (!personaggiList.length) {
+    if (buildSelectionHint) {
+      buildSelectionHint.innerHTML =
+        'Nessuna build disponibile. Vai in <a href="personaggio.html">Personaggio</a> e salva una scheda.';
+    }
+    clear_build_results();
+  } else if (buildSelectionHint) {
+    buildSelectionHint.textContent = "Seleziona un personaggio per iniziare.";
+  }
 }
 init_build_page();

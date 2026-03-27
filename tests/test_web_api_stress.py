@@ -1,9 +1,15 @@
 """
-Stress HTTP: cartella web (Flask). Solo GET sicuri + JSON shape su build/dashboard.
+Stress HTTP: cartella web (Flask). API dati richiedono sessione.
 """
 from __future__ import annotations
 
+import os
 import unittest
+
+# Sessione protetta come in produzione quando la password è impostata.
+os.environ.setdefault("GENSHIN_WEB_WRITE_PASSWORD", "web-api-stress-test-secret")
+
+from web.web_write_auth import SESSION_WRITE_KEY
 
 
 class WebApiStressTest(unittest.TestCase):
@@ -13,6 +19,8 @@ class WebApiStressTest(unittest.TestCase):
 
         flask_app.config["TESTING"] = True
         cls.client = flask_app.test_client()
+        with cls.client.session_transaction() as sess:
+            sess[SESSION_WRITE_KEY] = True
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -37,6 +45,7 @@ class WebApiStressTest(unittest.TestCase):
     def test_api_autocomplete_and_catalogo_repeated(self) -> None:
         self._get_many("/api/autocomplete", times=60)
         self._get_many("/api/personaggi/catalogo-nomi", times=40)
+        self._get_many("/api/catalogo/armi", times=24)
         for slot in ("fiore", "piuma", "calice", "corona", "sabbie"):
             self._get_many(f"/api/artefatti/catalogo?slot={slot}", times=25)
 
@@ -48,6 +57,7 @@ class WebApiStressTest(unittest.TestCase):
             "/personaggio.html",
             "/build.html",
             "/artefatti.html",
+            "/ottimizzazione.html",
             "/dashboard.html",
             "/team.html",
             "/istruzioni.html",
@@ -140,6 +150,14 @@ class WebApiStressTest(unittest.TestCase):
         j = rv.get_json()
         self.assertIn("ranking", j)
         self.assertIsInstance(j["ranking"], list)
+
+    def test_api_get_requires_session(self) -> None:
+        from web.app import app
+
+        naked = app.test_client()
+        r = naked.get("/api/personaggi")
+        self.assertEqual(r.status_code, 401)
+        self.assertEqual((r.get_json() or {}).get("code"), "auth_required")
 
 
 if __name__ == "__main__":

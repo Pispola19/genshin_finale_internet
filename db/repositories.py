@@ -2,6 +2,7 @@
 from typing import Optional, List, Tuple, Dict
 import sqlite3
 
+from core.nome_normalization import norm_key_nome
 from db.models import Personaggio, Arma, Artefatto, Costellazioni, Talenti
 
 
@@ -12,8 +13,11 @@ class PersonaggioRepository:
     def insert(conn, dati: tuple) -> int:
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO personaggi (nome, livello, elemento, hp_flat, atk_flat, def_flat, em_flat, cr, cd, er)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO personaggi (
+                nome, livello, elemento, hp_flat, atk_flat, def_flat, em_flat, cr, cd, er,
+                origine_nome, data_nome_custom, nota_nome_custom
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, dati)
         conn.commit()
         return cur.lastrowid
@@ -22,7 +26,9 @@ class PersonaggioRepository:
     def update(conn, id_pg: int, dati: tuple) -> None:
         cur = conn.cursor()
         cur.execute("""
-            UPDATE personaggi SET nome=?, livello=?, elemento=?, hp_flat=?, atk_flat=?, def_flat=?, em_flat=?, cr=?, cd=?, er=?
+            UPDATE personaggi SET nome=?, livello=?, elemento=?, hp_flat=?, atk_flat=?, def_flat=?,
+                em_flat=?, cr=?, cd=?, er=?,
+                origine_nome=?, data_nome_custom=?, nota_nome_custom=?
             WHERE id=?
         """, (*dati, id_pg))
         conn.commit()
@@ -50,19 +56,25 @@ class PersonaggioRepository:
 
     @staticmethod
     def nome_esiste(conn, nome: str, escludi_id: Optional[int] = None) -> bool:
+        want = norm_key_nome(nome)
         cur = conn.cursor()
-        if escludi_id is not None:
-            cur.execute("SELECT 1 FROM personaggi WHERE nome=? AND id!=?", (nome, escludi_id))
-        else:
-            cur.execute("SELECT 1 FROM personaggi WHERE nome=?", (nome,))
-        return cur.fetchone() is not None
+        cur.execute("SELECT id, nome FROM personaggi")
+        for pid, n in cur.fetchall():
+            if escludi_id is not None and int(pid) == int(escludi_id):
+                continue
+            if norm_key_nome(n or "") == want:
+                return True
+        return False
 
     @staticmethod
     def id_per_nome(conn, nome: str) -> Optional[int]:
+        want = norm_key_nome(nome)
         cur = conn.cursor()
-        cur.execute("SELECT id FROM personaggi WHERE nome=?", ((nome or "").strip(),))
-        row = cur.fetchone()
-        return int(row[0]) if row else None
+        cur.execute("SELECT id, nome FROM personaggi")
+        for pid, n in cur.fetchall():
+            if norm_key_nome(n or "") == want:
+                return int(pid)
+        return None
 
 
 class ArmaRepository:
@@ -72,13 +84,17 @@ class ArmaRepository:
         cur.execute("SELECT id FROM armi WHERE personaggio_id=?", (personaggio_id,))
         if cur.fetchone():
             cur.execute("""
-                UPDATE armi SET nome=?, tipo=?, livello=?, stelle=?, atk_base=?, stat_secondaria=?, valore_stat=?
+                UPDATE armi SET nome=?, tipo=?, livello=?, stelle=?, atk_base=?, stat_secondaria=?, valore_stat=?,
+                    origine_nome=?, data_nome_custom=?, nota_nome_custom=?
                 WHERE personaggio_id=?
             """, (*dati, personaggio_id))
         else:
             cur.execute("""
-                INSERT INTO armi (personaggio_id, nome, tipo, livello, stelle, atk_base, stat_secondaria, valore_stat)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO armi (
+                    personaggio_id, nome, tipo, livello, stelle, atk_base, stat_secondaria, valore_stat,
+                    origine_nome, data_nome_custom, nota_nome_custom
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (personaggio_id, *dati))
         conn.commit()
 

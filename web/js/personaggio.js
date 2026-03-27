@@ -14,10 +14,14 @@ const COST_IDS = ["c1", "c2", "c3", "c4", "c5", "c6"];
 let currentId = null;
 let personaggiList = [];
 let catalogoNomi = [];
+let catalogoArmi = [];
+let onlySavedPg = false;
 
 const searchPersonaggio = document.getElementById("searchPersonaggio");
 const autocompleteList = document.getElementById("autocompleteList");
 const nome = document.getElementById("nome");
+const datalistCatalogoPg = document.getElementById("datalist_catalogo_pg");
+const datalistCatalogoArmi = document.getElementById("datalist_catalogo_armi");
 const livello = document.getElementById("livello");
 const elemento = document.getElementById("elemento");
 const hp_flat = document.getElementById("hp_flat");
@@ -34,6 +38,7 @@ const arma_stelle = document.getElementById("arma_stelle");
 const arma_atk_base = document.getElementById("arma_atk_base");
 const arma_stat = document.getElementById("arma_stat");
 const arma_valore = document.getElementById("arma_valore");
+const btnOnlySavedPg = document.getElementById("btnOnlySavedPg");
 
 /** Allineato a config.STATS (suggerimenti stat secondaria arma). */
 const ARMA_STAT_SUGGESTIONS = [
@@ -60,7 +65,7 @@ function escArtTxt(t) {
 /** Anteprima manufatto (payload scheda personaggio / GET /api/personaggio/:id). */
 function formatArtefatto(info) {
   if (!info || info.id == null || info.id === "") {
-    return '<span class="art-empty">Nessun manufatto</span>';
+    return '<span class="art-empty">Nessun manufatto. Vai in <a href="artefatti.html#equip">Manufatti → Equip personaggio</a> per assegnare i pezzi.</span>';
   }
   const rows = [];
   rows.push(`<div class="art-row"><span class="art-k">Set</span><span class="art-v"><strong>${escArtTxt(info.set) || "—"}</strong></span></div>`);
@@ -99,6 +104,42 @@ async function loadPersonaggi() {
   }
 }
 
+/** Allineato a core.nome_normalization.norm_key_nome */
+function normKeyNome(s) {
+  return String(s || "")
+    .trim()
+    .split(/\s+/)
+    .join(" ")
+    .toLowerCase();
+}
+
+function fillDatalist(dl, items) {
+  if (!dl) return;
+  const esc = (v) =>
+    String(v)
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  dl.innerHTML = (items || []).map((t) => `<option value="${esc(t)}"></option>`).join("");
+}
+
+function nomeInCatalogoEffettivo(n) {
+  const k = normKeyNome(n);
+  if (!k) return false;
+  return catalogoNomi.some((x) => normKeyNome(x) === k);
+}
+
+function armaInCatalogoEffettivo(n) {
+  const k = normKeyNome(n);
+  if (!k) return true;
+  return catalogoArmi.some((x) => normKeyNome(x) === k);
+}
+
+function updateOrigineBadges(d) {
+  void d;
+}
+
 async function loadCatalogoNomi() {
   try {
     const r = await fetch(`${API}/personaggi/catalogo-nomi`);
@@ -114,21 +155,46 @@ async function loadCatalogoNomi() {
       catalogoNomi = [];
     }
   }
+  fillDatalist(datalistCatalogoPg, catalogoNomi);
+}
+
+async function loadCatalogoArmi() {
+  try {
+    const r = await fetch(`${API}/catalogo/armi`);
+    const j = await r.json();
+    catalogoArmi = Array.isArray(j.nomi) ? j.nomi : [];
+  } catch {
+    catalogoArmi = [];
+  }
+  fillDatalist(datalistCatalogoArmi, catalogoArmi);
 }
 
 function idSalvatoPerNome(nomeStr) {
-  const p = personaggiList.find(x => (x.nome || "") === nomeStr);
+  const k = normKeyNome(nomeStr);
+  const p = personaggiList.find(x => normKeyNome(x.nome || "") === k);
   return p ? p.id : null;
 }
 
 function suggestionsNomePersonaggio(query) {
   const q = (query || "").toLowerCase().trim();
-  let names = catalogoNomi.length ? catalogoNomi : [...new Set(personaggiList.map(p => p.nome).filter(Boolean))];
+  let names;
+  if (onlySavedPg) {
+    names = [...new Set(personaggiList.map(p => p.nome).filter(Boolean))];
+  } else {
+    names = catalogoNomi.length ? catalogoNomi : [...new Set(personaggiList.map(p => p.nome).filter(Boolean))];
+  }
   if (q) names = names.filter(n => (n || "").toLowerCase().includes(q));
   return names.map(nomeStr => {
     const id = idSalvatoPerNome(nomeStr);
     return { nome: nomeStr, id, salvato: id != null };
   });
+}
+
+function refreshAutocompleteCurrentQuery() {
+  if (!searchPersonaggio || !autocompleteList) return;
+  // Evita di aprire automaticamente il menu: aggiorniamo solo se l'input è in focus.
+  if (document.activeElement !== searchPersonaggio) return;
+  showAutocomplete(suggestionsNomePersonaggio(searchPersonaggio.value));
 }
 
 function showAutocomplete(suggestions) {
@@ -175,12 +241,19 @@ document.addEventListener("click", e => {
   if (!inSearch) autocompleteList.style.display = "none";
 });
 
-/** Riempie il modulo scheda da oggetto come GET /api/personaggio/:id (o campo dati dopo import). */
+btnOnlySavedPg?.addEventListener("click", () => {
+  onlySavedPg = !onlySavedPg;
+  if (btnOnlySavedPg) btnOnlySavedPg.setAttribute("aria-pressed", onlySavedPg ? "true" : "false");
+  refreshAutocompleteCurrentQuery();
+});
+
+/** Riempie il modulo scheda da oggetto come GET /api/personaggio/:id. */
 function applySchedaToForm(d, idPg) {
   if (!d) return;
   if (idPg != null) currentId = idPg;
 
-  nome.value = d.nome || "";
+  const wantNome = (d.nome || "").trim();
+  if (nome) nome.value = wantNome;
   livello.value = d.livello === "-" ? "" : d.livello;
   elemento.value = d.elemento || "Pyro";
   hp_flat.value = d.hp_flat === "-" ? "" : d.hp_flat;
@@ -192,7 +265,8 @@ function applySchedaToForm(d, idPg) {
   er.value = d.er === "-" ? "" : d.er;
 
   if (d.arma) {
-    arma_nome.value = d.arma.nome || "";
+    const an = (d.arma.nome || "").trim();
+    if (arma_nome) arma_nome.value = an;
     arma_tipo.value = d.arma.tipo || "Spada";
     arma_livello.value = d.arma.livello === "-" ? "" : d.arma.livello;
     arma_stelle.value = d.arma.stelle === "-" ? "" : d.arma.stelle;
@@ -220,7 +294,7 @@ function applySchedaToForm(d, idPg) {
       if (contentEl) contentEl.innerHTML = formatArtefatto(info);
     }
   }
-  syncImportUpdateBtn();
+  updateOrigineBadges(d);
 }
 
 async function loadPersonaggio(id) {
@@ -232,11 +306,26 @@ async function loadPersonaggio(id) {
 }
 
 async function salva() {
+  const pgNome = nome ? nome.value.trim() : "";
+  const arNome = arma_nome ? arma_nome.value.trim() : "";
+  const meta = {};
+
   const payload = {
     id: currentId,
-    personaggio: { nome: nome.value.trim(), livello: livello.value || 1, elemento: elemento.value, hp_flat: hp_flat.value, atk_flat: atk_flat.value, def_flat: def_flat.value, em_flat: em_flat.value, cr: cr.value, cd: cd.value, er: er.value },
+    personaggio: {
+      nome: pgNome,
+      livello: livello.value || 1,
+      elemento: elemento.value,
+      hp_flat: hp_flat.value,
+      atk_flat: atk_flat.value,
+      def_flat: def_flat.value,
+      em_flat: em_flat.value,
+      cr: cr.value,
+      cd: cd.value,
+      er: er.value,
+    },
     arma: {
-      nome: arma_nome.value.trim(),
+      nome: arNome,
       tipo: arma_tipo.value,
       livello: arma_livello.value,
       stelle: arma_stelle.value,
@@ -244,8 +333,9 @@ async function salva() {
       stat_secondaria: arma_stat.value,
       valore_stat: arma_valore.value,
     },
-    costellazioni: Object.fromEntries(COST_IDS.map(k => [k, document.getElementById(k).value])),
-    talenti: Object.fromEntries(TALENT_IDS.map(id => [id, document.getElementById(id).value])),
+    costellazioni: Object.fromEntries(COST_IDS.map((k) => [k, document.getElementById(k).value])),
+    talenti: Object.fromEntries(TALENT_IDS.map((tid) => [tid, document.getElementById(tid).value])),
+    meta,
   };
 
   const r = await fetch(`${API}/personaggio`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -255,6 +345,7 @@ async function salva() {
   searchPersonaggio.value = nome.value;
   await loadPersonaggi();
   await loadCatalogoNomi();
+  await loadCatalogoArmi();
   await loadPersonaggio(currentId);
   alert("Salvato!");
 }
@@ -277,6 +368,7 @@ function nuovo() {
     const contentEl = document.getElementById(artLabels[slot]);
     if (contentEl) contentEl.innerHTML = '<span class="art-empty">Nessun manufatto</span>';
   });
+  updateOrigineBadges({ origine_nome: "ufficiale", arma: { origine_nome: "ufficiale" } });
 }
 
 async function cancella() {
@@ -302,200 +394,18 @@ async function cancella() {
   }
 }
 
-function syncImportUpdateBtn() {
-  const btn = document.getElementById("importUpdateBtn");
-  if (btn) btn.disabled = !currentId;
-}
-
 document.getElementById("btnNuovo").addEventListener("click", () => {
   nuovo();
-  syncImportUpdateBtn();
 });
 document.getElementById("btnSalva").addEventListener("click", salva);
 document.getElementById("btnCancella").addEventListener("click", cancella);
 
-const importBackdrop = document.getElementById("importBackdrop");
-const importRaw = document.getElementById("importRaw");
-const importPreview = document.getElementById("importPreview");
-const importChoiceWrap = document.getElementById("importChoiceWrap");
-const importChoiceNome = document.getElementById("importChoiceNome");
 const listaPgBackdrop = document.getElementById("listaPgBackdrop");
-
-function openImportModal() {
-  if (!importBackdrop) return;
-  importBackdrop.hidden = false;
-  if (importPreview) {
-    importPreview.hidden = true;
-    importPreview.textContent = "";
-  }
-  if (importChoiceWrap) importChoiceWrap.hidden = true;
-  syncImportUpdateBtn();
-}
-
-function closeImportModal() {
-  if (importBackdrop) importBackdrop.hidden = true;
-}
-
-document.getElementById("importClose")?.addEventListener("click", closeImportModal);
-importBackdrop?.addEventListener("click", (e) => {
-  if (e.target === importBackdrop) closeImportModal();
-});
-
-document.getElementById("navImportLink")?.addEventListener("click", (e) => {
-  e.preventDefault();
-  openImportModal();
-});
-
-if (location.hash === "#import") {
-  openImportModal();
-  history.replaceState(null, "", location.pathname + location.search);
-}
-
-function importModeValue() {
-  const sel = document.getElementById("importMode");
-  const v = sel && sel.value ? String(sel.value).trim().toLowerCase() : "update";
-  if (v === "replace" || v === "update" || v === "append_dedup" || v === "append_force") return v;
-  return "update";
-}
-
-async function runImportPreview() {
-  if (!importRaw) return;
-  const r = await fetch(`${API}/personaggio/import-incolla`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      raw: importRaw.value,
-      preview: true,
-      import_mode: importModeValue(),
-    }),
-  });
-  let data = {};
-  try {
-    data = await r.json();
-  } catch {
-    /* ignore */
-  }
-  if (!r.ok || data.error) {
-    alert("Errore: " + (data.error || r.statusText || r.status));
-    return;
-  }
-  if (importPreview) {
-    let block = data.summary || "";
-    if (data.stats && typeof data.stats === "object") {
-      const s = data.stats;
-      block =
-        `Modalità manufatti: ${String(data.import_mode || importModeValue())}\n` +
-        `Personaggi: ${s.n_characters != null ? s.n_characters : "—"} · ` +
-        `Armi: ${s.n_weapons != null ? s.n_weapons : "—"} · ` +
-        `Manufatti: ${s.n_relics != null ? s.n_relics : "—"} ` +
-        `(${s.n_relics_incomplete != null ? s.n_relics_incomplete : "—"} incompleti)\n` +
-        (data.parse_skips && data.parse_skips.length
-          ? `Scartati in lettura: ${data.parse_skips.length}\n`
-          : "") +
-        "\n" +
-        block;
-    }
-    importPreview.textContent = block;
-    importPreview.hidden = false;
-  }
-  if (data.bulk && importChoiceWrap) {
-    importChoiceWrap.hidden = true;
-  } else if (
-    importChoiceWrap &&
-    importChoiceNome &&
-    Array.isArray(data.choices) &&
-    data.choices.length > 1
-  ) {
-    importChoiceWrap.hidden = false;
-    importChoiceNome.innerHTML = "";
-    data.choices.forEach((n) => {
-      const o = document.createElement("option");
-      o.value = n;
-      o.textContent = n;
-      importChoiceNome.appendChild(o);
-    });
-  } else if (importChoiceWrap) {
-    importChoiceWrap.hidden = true;
-  }
-}
-
-document.getElementById("importPreviewBtn")?.addEventListener("click", runImportPreview);
-
-async function doImport(asNew) {
-  if (!importRaw) return;
-  const payload = { raw: importRaw.value, preview: false, import_mode: importModeValue() };
-  if (importChoiceWrap && !importChoiceWrap.hidden && importChoiceNome && importChoiceNome.value) {
-    payload.character_nome = importChoiceNome.value;
-  }
-  if (!asNew) {
-    if (!currentId) {
-      alert("Nessuna scheda aperta. Usa MODIFICA per caricare un personaggio, oppure Importa come nuovo.");
-      return;
-    }
-    payload.id = currentId;
-  }
-  const r = await fetch(`${API}/personaggio/import-incolla`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  let data = {};
-  try {
-    data = await r.json();
-  } catch {
-    /* ignore */
-  }
-  if (!r.ok || data.error) {
-    alert("Errore: " + (data.error || r.statusText || r.status));
-    return;
-  }
-
-  await loadPersonaggi();
-  await loadCatalogoNomi();
-
-  if (data.dati) {
-    applySchedaToForm(data.dati, data.id);
-  } else {
-    const loaded = await loadPersonaggio(data.id);
-    if (!loaded) {
-      alert("Import salvato ma impossibile ricaricare la scheda. Ricarica la pagina.");
-      currentId = data.id;
-      syncImportUpdateBtn();
-      closeImportModal();
-      return;
-    }
-  }
-
-  searchPersonaggio.value = nome.value.trim() || searchPersonaggio.value;
-  syncImportUpdateBtn();
-  closeImportModal();
-
-  const mainEl = document.querySelector(".personaggio-main") || document.getElementById("nome");
-  if (mainEl && typeof mainEl.scrollIntoView === "function") {
-    mainEl.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  let msg = data.summary || "";
-  if (data.bulk) {
-    msg =
-      `Import gruppo: ${data.imported != null ? data.imported : "?"} personaggi salvati.\n` +
-      (data.errors && data.errors.length
-        ? "\nAvvisi: " + data.errors.map((e) => (e.nome || "?") + ": " + (e.error || "")).join("; ")
-        : "") +
-      "\n\n" + msg;
-  } else {
-    msg = "Import completato — scheda aggiornata.\n\n" + msg;
-  }
-  alert(msg);
-}
-
-document.getElementById("importNewBtn")?.addEventListener("click", () => doImport(true));
-document.getElementById("importUpdateBtn")?.addEventListener("click", () => doImport(false));
 
 function openListaModifica() {
   if (!listaPgBackdrop) return;
   if (!personaggiList.length) {
-    alert("Non ci sono personaggi salvati. Usa NUOVO o Import.");
+    alert("Nessun personaggio salvato. Premi NUOVO, compila la scheda e salva.");
     return;
   }
   const ul = document.getElementById("listaPgUl");
@@ -510,7 +420,6 @@ function openListaModifica() {
       await loadPersonaggio(p.id);
       searchPersonaggio.value = p.nome;
       listaPgBackdrop.hidden = true;
-      syncImportUpdateBtn();
     });
     ul.appendChild(li);
   });
@@ -527,7 +436,7 @@ listaPgBackdrop?.addEventListener("click", (e) => {
 
 async function initPersonaggioPage() {
   initArmaStatDatalist();
-  await Promise.all([loadPersonaggi(), loadCatalogoNomi()]);
-  syncImportUpdateBtn();
+  await Promise.all([loadPersonaggi(), loadCatalogoNomi(), loadCatalogoArmi()]);
+  if (btnOnlySavedPg) btnOnlySavedPg.setAttribute("aria-pressed", onlySavedPg ? "true" : "false");
 }
 initPersonaggioPage();

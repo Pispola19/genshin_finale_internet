@@ -10,22 +10,22 @@ import sys
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from config import PROJECT_ROOT, SLOT_UI, SLOT_DB, ELEMENTI, TIPI_ARMA, STATS, SET_ARTEFATTI, MOSTRA_PULSANTE_HOYOLAB
+from config import (
+    PROJECT_ROOT,
+    SLOT_UI,
+    SLOT_DB,
+    ELEMENTI,
+    TIPI_ARMA,
+    STATS,
+    SET_ARTEFATTI,
+)
 from gui.form_checkpoint import (
     load_and_apply_gui_checkpoint,
     mark_gui_checkpoint_dirty,
     save_gui_checkpoint_safe,
 )
 from gui.safe_ops import gui_safe_call, notify_unexpected
-from core.import_log import append_import_log
-from core.hoyolab_import import compute_hoyo_preview_stats, normalize_import_mode
-from core.manual_import import (
-    ImportParseError,
-    apply_manual_import,
-    list_character_choices,
-    parse_pasted_payload,
-    preview_summary,
-)
+from core.nome_normalization import canonicalizza_nome_arma, canonicalizza_nome_personaggio
 from core.services import AppService
 from core.dps_types import DpsResult
 from gui.widgets import AutocompleteCombobox, create_entry
@@ -90,9 +90,8 @@ PASSO 1 — Personaggio
 PASSO 2 — Statistiche (HP, ATK, DEF, EM, CR, CD, ER)
 Sono le stesse voci che vedi sulla scheda personaggio in gioco o su schermate tipo battaglia / attributi. Compila i numeri che vuoi tenere sotto controllo per la tua build.
 
-Import da HoYoLAB (copia-incolla dal sito, senza collegare account a quest’app)
-• In alto nella finestra: «Importa personaggio…» sulla barra colorata, oppure menu Dati → Importa personaggio….
-• «Dashboard» apre la pagina del programma nel browser (se usi il server in locale, avvialo prima oppure imposta l’indirizzo web nelle impostazioni del sistema).
+Inserimento manuale (consigliato)
+• Compila scheda personaggio, arma e manufatti a mano. «Dashboard» apre il sito web del programma (in locale avvia prima il server o imposta l’indirizzo con le variabili d’ambiente).
 • Su Mac il menu «Dati» sta nella barra in alto dello schermo (vicino al nome dell’app), non sulla finestra.
 
 PASSO 3 — Arma
@@ -129,8 +128,15 @@ Puoi aprire il file Word “questionario_genshin_avanzato.docx” con il pulsant
 Divertiti!"""
 
 
+_EXIT_GUI_FORCE_WEB = 3
+
+
+def _env_truthy(name: str) -> bool:
+    return (os.environ.get(name) or "").strip().lower() in ("1", "true", "yes")
+
+
 class GenshinApp:
-    """Applicazione Genshin Manager. GUI: solo eventi e view."""
+    """Applicazione Genshin Manager. GUI: solo eventi e view (non l’entry point ufficiale)."""
 
     def __init__(self):
         self.service = AppService()
@@ -138,6 +144,12 @@ class GenshinApp:
         self.slot_map = dict(zip(SLOT_UI, SLOT_DB))
 
     def run(self):
+        if _env_truthy("GENSHIN_FORCE_WEB"):
+            print(
+                "GENSHIN_FORCE_WEB=1: avvio GUI Tk bloccato. Entry point ufficiale: python3 run_web.py",
+                file=sys.stderr,
+            )
+            sys.exit(_EXIT_GUI_FORCE_WEB)
         self._build_ui()
         self._bind_events()
         try:
@@ -185,9 +197,6 @@ class GenshinApp:
     def _build_menu(self):
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
-        data_m = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Dati", menu=data_m)
-        data_m.add_command(label="Importa personaggio…", command=self._import_da_copia)
         analisi_m = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Analisi", menu=analisi_m)
         analisi_m.add_command(label="Stima rotazione DPS…", command=self._apri_stima_rotazione)
@@ -205,9 +214,6 @@ class GenshinApp:
             side="left", padx=(0, 10)
         )
         tk.Button(bar, text="Dashboard", font=("Helvetica", 11), command=self._open_web_dashboard, padx=12).pack(
-            side="left", padx=(0, 6)
-        )
-        tk.Button(bar, text="Importa personaggio…", font=("Helvetica", 11), command=self._import_da_copia, padx=12).pack(
             side="left", padx=(0, 6)
         )
         tk.Button(bar, text="Rotazione…", font=("Helvetica", 11), command=self._apri_stima_rotazione, padx=12).pack(
@@ -299,269 +305,6 @@ class GenshinApp:
             logger.exception("_apri_questionario_docx")
             notify_unexpected(self.root)
 
-    def _import_da_copia(self):
-        """Import da payload incollato (logica in core/manual_import.py)."""
-        win = tk.Toplevel(self.root)
-        win.title("Importa personaggio")
-        win.geometry("760x640")
-        win.minsize(560, 480)
-
-        hint_wrap = tk.Frame(win, bg="#eef2ff")
-        hint_wrap.pack(fill="x", padx=10, pady=(12, 6))
-        tk.Label(
-            hint_wrap,
-            text="Come fare",
-            font=("Helvetica", 15, "bold"),
-            bg="#eef2ff",
-            fg="#1e2a6e",
-            anchor="w",
-        ).pack(fill="x", padx=12, pady=(10, 4))
-        hint = tk.Text(
-            hint_wrap,
-            height=6,
-            wrap="word",
-            font=("Helvetica", 14),
-            bg="#eef2ff",
-            fg="#222233",
-            relief="flat",
-            padx=12,
-            pady=(0, 12),
-            highlightthickness=0,
-        )
-        hint.pack(fill="x")
-        hint.insert(
-            "1.0",
-            "1. Apri HoYoLAB nel browser.\n"
-            "2. Vai nella sezione dei tuoi personaggi (schede eroe / resoconto di battaglia, come sul sito).\n"
-            "3. Copia i dati del personaggio dalla pagina (su Mac ⌘C, su Windows Ctrl+C).\n"
-            "4. Incolla qui sotto nell’area grande, poi premi «Controlla dati».",
-        )
-        hint.config(state="disabled")
-
-        mode_fr = tk.LabelFrame(win, text="Manufatti da JSON HoYoLab", padx=8, pady=6)
-        # Default più sicura: update (preserva le stat DB se HoYo non le invia).
-        import_mode_var = tk.StringVar(value="update")
-        for val, cap in (
-            ("replace", "Sostituisci equip (rimuovi pezzi attuali sul personaggio)"),
-            ("update", "Unisci per slot (conserva stat se HoYo non le invia)"),
-            ("append_dedup", "Solo magazzino — dedup (evita duplicati identici)"),
-            ("append_force", "Solo magazzino — force (duplica anche se identici)"),
-        ):
-            tk.Radiobutton(
-                mode_fr, text=cap, variable=import_mode_var, value=val, anchor="w", justify="left"
-            ).pack(fill="x")
-        mode_fr.pack(fill="x", padx=10, pady=(0, 6))
-        outer = tk.Frame(win)
-        outer.pack(fill="both", expand=True, padx=10, pady=6)
-        txt = tk.Text(outer, height=14, font=("Menlo", 10) if sys.platform == "darwin" else ("Consolas", 10))
-        ys = tk.Scrollbar(outer, command=txt.yview)
-        txt.config(yscrollcommand=ys.set)
-        txt.pack(side="left", fill="both", expand=True)
-        ys.pack(side="right", fill="y")
-
-        choice_fr = tk.Frame(win)
-        tk.Label(choice_fr, text="Se nei dati incollati c’è più di un personaggio, scegli quale importare:").pack(
-            side="left", padx=(0, 8)
-        )
-        choice_var = tk.StringVar()
-        choice_cb = ttk.Combobox(choice_fr, textvariable=choice_var, state="readonly", width=36)
-
-        preview_lbl = tk.Label(
-            win, text="Incolla qui sopra, poi premi «Controlla dati».", justify="left", anchor="nw", font=("Helvetica", 10)
-        )
-        preview_lbl.pack(fill="x", padx=10, pady=6)
-
-        parsed_holder: dict = {"p": None}
-
-        def refresh_preview(*_):
-            try:
-                p = parse_pasted_payload(txt.get("1.0", "end"))
-                parsed_holder["p"] = p
-                if p.get("bulk"):
-                    choice_fr.pack_forget()
-                    preview_lbl.config(text=preview_summary(p))
-                    return
-                chs = list_character_choices(p)
-                if len(chs) > 1:
-                    names = [c["nome"] for c in chs]
-                    choice_cb["values"] = names
-                    if choice_var.get() not in names:
-                        choice_var.set(names[0])
-                    choice_cb.pack(side="left")
-                    choice_fr.pack(fill="x", padx=10, pady=(0, 4))
-                else:
-                    choice_fr.pack_forget()
-                preview_lbl.config(text=preview_summary(_effective_parsed()))
-            except ImportParseError as e:
-                parsed_holder["p"] = None
-                choice_fr.pack_forget()
-                preview_lbl.config(text=f"Errore: {e}")
-
-        def _effective_parsed():
-            p = parsed_holder["p"]
-            if not p:
-                return None
-            chs = list_character_choices(p)
-            if len(chs) <= 1:
-                return p
-            name = choice_var.get() or chs[0]["nome"]
-            sel = next((c for c in chs if c["nome"] == name), chs[0])
-            out = dict(p)
-            out["character"] = sel
-            return out
-
-        choice_cb.bind("<<ComboboxSelected>>", lambda e: preview_lbl.config(text=preview_summary(_effective_parsed())))
-
-        btns = tk.Frame(win)
-        btns.pack(fill="x", padx=10, pady=10)
-        tk.Button(btns, text="Controlla dati", command=refresh_preview).pack(side="left", padx=4)
-        tk.Button(btns, text="Importa come nuovo personaggio", command=lambda: _do_import(True)).pack(side="left", padx=4)
-        btn_upd = tk.Button(btns, text="Aggiorna la scheda che ho aperta", command=lambda: _do_import(False))
-        btn_upd.pack(side="left", padx=4)
-
-        def _do_import(as_new: bool):
-            try:
-                if parsed_holder["p"] is None:
-                    refresh_preview()
-                p = parsed_holder["p"]
-                if not p:
-                    messagebox.showwarning(
-                        "Importa personaggio",
-                        "Non riesco a leggere nulla di valido. Incolla i dati nell’area grande, poi premi «Controlla dati».",
-                        parent=win,
-                    )
-                    return
-                if p.get("bulk"):
-                    if not as_new:
-                        messagebox.showinfo(
-                            "Importa personaggio",
-                            "Per aggiornare una scheda singola usa i dati di un solo personaggio, oppure importa tutto come nuovo.",
-                            parent=win,
-                        )
-                        return
-                    imports = p.get("imports") or []
-                    err_lines = []
-                    err_detail = []
-                    last_id = None
-                    ok_n = 0
-                    imported_names: list = []
-                    imode = normalize_import_mode(import_mode_var.get())
-                    for imp in imports:
-                        nome_i = (imp.get("character") or {}).get("nome") or ""
-                        if not nome_i:
-                            continue
-                        merge_id = self.service.id_per_nome(nome_i)
-                        ok, msg = self.service.valida_nome(nome_i, merge_id)
-                        if not ok:
-                            err_lines.append(f"{nome_i}: {msg}")
-                            err_detail.append({"nome": nome_i, "error": msg})
-                            continue
-                        try:
-                            last_id = apply_manual_import(
-                                self.service, imp, merge_id, touch_equipment=None, import_mode=imode
-                            )
-                            ok_n += 1
-                            imported_names.append(nome_i)
-                        except Exception as ie:
-                            err_lines.append(f"{nome_i}: {ie}")
-                            err_detail.append({"nome": nome_i, "error": str(ie)})
-                            continue
-                    if ok_n == 0:
-                        messagebox.showerror(
-                            "Importa personaggio",
-                            "Nessun personaggio importato.\n" + "\n".join(err_lines[:8]),
-                            parent=win,
-                        )
-                        return
-                    self.selected_id = last_id
-                    if last_id:
-                        dati = self.service.carica_dati_completi(last_id)
-                        if dati:
-                            self._populate_form(dati)
-                    save_gui_checkpoint_safe(self)
-                    win.destroy()
-                    append_import_log(
-                        {
-                            "source": "gui",
-                            "bulk": True,
-                            "import_mode": imode,
-                            "imported_ok": ok_n,
-                            "imported_names": imported_names,
-                            "errors": err_detail,
-                            "parse_skips": p.get("parse_skips") or [],
-                            "stats": compute_hoyo_preview_stats(p),
-                        }
-                    )
-                    tail = ("\n\nErrori:\n" + "\n".join(err_lines[:6])) if err_lines else ""
-                    messagebox.showinfo(
-                        "Importa personaggio",
-                        f"Importati {ok_n} personaggi (modalità manufatti: {imode}).{tail}",
-                        parent=win,
-                    )
-                    return
-
-                p = _effective_parsed()
-                if not p:
-                    messagebox.showwarning(
-                        "Importa personaggio",
-                        "Non riesco a leggere nulla di valido. Incolla i dati nell’area grande, poi premi «Controlla dati».",
-                        parent=win,
-                    )
-                    return
-                sid = None if as_new else self.selected_id
-                if not as_new and sid is None:
-                    messagebox.showwarning(
-                        "Importa personaggio",
-                        "Non c’è una scheda aperta: usa Lista per caricare un personaggio, oppure «Importa come nuovo personaggio».",
-                        parent=win,
-                    )
-                    return
-                nome_sel = p["character"]["nome"]
-                merge_id = sid if sid is not None else self.service.id_per_nome(nome_sel)
-                ok, msg = self.service.valida_nome(nome_sel, merge_id)
-                if not ok:
-                    messagebox.showinfo("Attenzione", msg, parent=win)
-                    return
-                imode = normalize_import_mode(import_mode_var.get())
-                new_id = apply_manual_import(
-                    self.service, p, merge_id, touch_equipment=None, import_mode=imode
-                )
-                self.selected_id = new_id
-                dati = self.service.carica_dati_completi(new_id)
-                if dati:
-                    self._populate_form(dati)
-                append_import_log(
-                    {
-                        "source": "gui",
-                        "bulk": False,
-                        "import_mode": imode,
-                        "imported_ok": 1,
-                        "errors": [],
-                        "parse_skips": p.get("parse_skips") or [],
-                        "stats": compute_hoyo_preview_stats(p),
-                        "personaggio": (p.get("character") or {}).get("nome"),
-                        "imported_names": [(p.get("character") or {}).get("nome")],
-                    }
-                )
-                save_gui_checkpoint_safe(self)
-                win.destroy()
-                messagebox.showinfo(
-                    "Importa personaggio",
-                    f"Fatto! Scheda aggiornata (manufatti: {imode}).",
-                )
-            except ImportParseError:
-                logger.exception("import manual ImportParseError")
-                notify_unexpected(win)
-            except Exception:
-                logger.exception("import manual")
-                notify_unexpected(win)
-
-        def _sync_update_btn_state(_evt=None):
-            btn_upd.config(state="normal" if self.selected_id is not None else "disabled")
-
-        _sync_update_btn_state()
-        win.bind("<FocusIn>", _sync_update_btn_state)
-
     def _build_scrollable_main(self):
         canvas = tk.Canvas(self.root)
         scrollbar = tk.Scrollbar(self.root, orient="vertical", command=canvas.yview, width=25)
@@ -587,7 +330,13 @@ class GenshinApp:
         tk.Label(fn, text="Nome").pack(side="left")
         self.nome_var = tk.StringVar()
         nomi = self.service.nomi_per_autocomplete()
-        self.nome_combo = AutocompleteCombobox(fn, values=nomi, width=25, textvariable=self.nome_var)
+        self.nome_combo = ttk.Combobox(
+            fn,
+            values=tuple([""]) + tuple(nomi),
+            width=25,
+            textvariable=self.nome_var,
+            state="normal",
+        )
         self.nome_combo.pack(side="left", padx=5)
         self.livello_entry = create_entry(r1, "Livello", 5)
         self.elemento_var = tk.StringVar(value="Pyro")
@@ -641,7 +390,13 @@ class GenshinApp:
         r = tk.Frame(col_left)
         r.pack(fill="x", pady=3)
         row_label(r, "Nome").pack(side="left", padx=(0, 6))
-        self.arma_nome_entry = tk.Entry(r, width=34)
+        nomi_ar = self.service.nomi_armi_autocomplete()
+        self.arma_nome_entry = ttk.Combobox(
+            r,
+            values=tuple([""]) + tuple(nomi_ar),
+            width=34,
+            state="normal",
+        )
         self.arma_nome_entry.pack(side="left", fill="x", expand=True)
 
         r = tk.Frame(col_left)
@@ -749,13 +504,33 @@ class GenshinApp:
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
     # --- Visualizzazione ---
+    def _refresh_nome_armi_combos(self, nome_extra: str = "", arma_extra: str = "") -> None:
+        nomi = list(self.service.nomi_per_autocomplete())
+        ne = (nome_extra or "").strip()
+        if ne and ne not in nomi:
+            nomi.append(ne)
+        self.nome_combo["values"] = tuple([""]) + tuple(sorted(nomi, key=str.lower))
+        try:
+            self.nome_combo._values = self.nome_combo["values"]
+        except tk.TclError:
+            pass
+        arms = list(self.service.nomi_armi_autocomplete())
+        ae = (arma_extra or "").strip()
+        if ae and ae not in arms:
+            arms.append(ae)
+        self.arma_nome_entry["values"] = tuple([""]) + tuple(sorted(arms, key=str.lower))
+        try:
+            self.arma_nome_entry._values = self.arma_nome_entry["values"]
+        except tk.TclError:
+            pass
+
     def _clear_form(self):
         self.nome_var.set("")
         self._set_entry(self.livello_entry, "")
         self.elemento_var.set("Pyro")
         for e in self._personaggio_entries:
             self._set_entry(e, "")
-        self._set_entry(self.arma_nome_entry, "")
+        self.arma_nome_entry.set("")
         self.tipo_var.set("Spada")
         self._set_entry(self.arma_liv_entry, "")
         self._set_entry(self.arma_stelle_entry, "")
@@ -788,7 +563,7 @@ class GenshinApp:
                 self._set_entry(e, v)
 
             arma = dati["arma"]
-            self._set_entry(self.arma_nome_entry, arma["nome"])
+            self.arma_nome_entry.set(arma.get("nome") or "")
             self.tipo_var.set(arma["tipo"])
             self._set_entry(self.arma_liv_entry, arma["livello"])
             self._set_entry(self.arma_stelle_entry, arma["stelle"])
@@ -805,8 +580,12 @@ class GenshinApp:
             for slot_ui, slot_db in self.slot_map.items():
                 art = dati["artefatti"].get(slot_db)
                 w = self.artefatti_widgets[slot_ui]
-                w["artefatto_id"] = art["id"] if art else None
-                w["label_art"].config(text=art["label"] if art else "—")
+                aid = art.get("id") if art else None
+                w["artefatto_id"] = aid if aid not in (None, "") else None
+                w["label_art"].config(text=(art.get("label") if art else None) or "—")
+
+            am = dati.get("arma") or {}
+            self._refresh_nome_armi_combos(nome_extra=dati.get("nome") or "", arma_extra=am.get("nome") or "")
         except Exception:
             logger.exception("_populate_form")
             notify_unexpected(self.root)
@@ -852,22 +631,31 @@ class GenshinApp:
         self._clear_form()
 
     def _on_salva(self):
-        ok, msg = self.service.valida_nome(self._form_personaggio()["nome"], self.selected_id)
+        fp = self._form_personaggio()
+        nome = canonicalizza_nome_personaggio((fp.get("nome") or ""))
+        fa = self._form_arma()
+        an = canonicalizza_nome_arma((fa.get("nome") or ""))
+        meta = {}
+
+        ok, msg = self.service.valida_nome(
+            nome,
+            self.selected_id,
+            custom_confirm=True,
+        )
         if not ok:
             messagebox.showinfo("Attenzione", msg)
             return
         try:
             self.selected_id = self.service.salva_completo(
                 self.selected_id,
-                self._form_personaggio(),
-                self._form_arma(),
+                fp,
+                fa,
                 self._form_costellazioni(),
                 self._form_talenti(),
                 self._form_equipaggiamento(),
+                meta=meta,
             )
-            # Aggiorna autocomplete con eventuali nuovi nomi
-            self.nome_combo["values"] = self.service.nomi_per_autocomplete()
-            self.nome_combo._values = self.nome_combo["values"]
+            self._refresh_nome_armi_combos(nome_extra=nome, arma_extra=an)
             try:
                 from core.checkpoint import maybe_checkpoint_after_save
 
@@ -937,8 +725,7 @@ class GenshinApp:
         try:
             n = self.service.rimuovi_entrate_test()
             if n > 0:
-                self.nome_combo["values"] = self.service.nomi_per_autocomplete()
-                self.nome_combo._values = self.nome_combo["values"]
+                self._refresh_nome_armi_combos()
                 if self.selected_id:
                     # Verifica se il personaggio selezionato era tra i test
                     dati = self.service.carica_dati_completi(self.selected_id)
@@ -1362,8 +1149,6 @@ class GenshinApp:
             r1b = tk.Frame(f)
             r1b.pack(fill="x", pady=2)
             q = lambda: _set_effettivo() or nome_combo.get()
-            if MOSTRA_PULSANTE_HOYOLAB:
-                tk.Button(r1b, text="Hoyolab", command=lambda: webbrowser.open(self.service.cerca_artefatto_online(q()))).pack(side="left", padx=(0, 5))
             tk.Button(r1b, text="Cerca web", command=lambda: webbrowser.open(self.service.cerca_artefatto_web(q()))).pack(side="left")
 
             r2 = tk.Frame(f)

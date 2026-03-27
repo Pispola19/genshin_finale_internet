@@ -85,6 +85,7 @@ def init_databases(conn_main, conn_artefatti):
     _init_artefatti_db(conn_artefatti)
     _migrate_artefatti_v4_reset_inventario(conn_main, conn_artefatti)
     _migrate_artefatti_v5_assegna_su_artefatto(conn_main, conn_artefatti)
+    _migrate_artefatti_v6_meta_custom(conn_artefatti)
     _pulisci_assegna_orfani_artefatti(conn_main, conn_artefatti)
 
 
@@ -177,6 +178,42 @@ def _run_migrations_main(cur):
             PRIMARY KEY(personaggio_id, slot)
         )
     """)
+    _migrate_main_custom_meta_columns(cur)
+
+
+def _migrate_main_custom_meta_columns(cur):
+    """origine / audit per nomi personaggio e arma (Approccio A)."""
+    specs = (
+        (
+            "personaggi",
+            (
+                ("origine_nome", "ALTER TABLE personaggi ADD COLUMN origine_nome TEXT DEFAULT 'ufficiale'"),
+                ("data_nome_custom", "ALTER TABLE personaggi ADD COLUMN data_nome_custom TEXT"),
+                ("nota_nome_custom", "ALTER TABLE personaggi ADD COLUMN nota_nome_custom TEXT"),
+            ),
+        ),
+        (
+            "armi",
+            (
+                ("origine_nome", "ALTER TABLE armi ADD COLUMN origine_nome TEXT DEFAULT 'ufficiale'"),
+                ("data_nome_custom", "ALTER TABLE armi ADD COLUMN data_nome_custom TEXT"),
+                ("nota_nome_custom", "ALTER TABLE armi ADD COLUMN nota_nome_custom TEXT"),
+            ),
+        ),
+    )
+    for table, alters in specs:
+        try:
+            cur.execute(f"PRAGMA table_info({table})")
+            have = {r[1] for r in cur.fetchall()}
+        except sqlite3.OperationalError:
+            continue
+        for col_name, stmt in alters:
+            if col_name in have:
+                continue
+            try:
+                cur.execute(stmt)
+            except sqlite3.OperationalError:
+                pass
 
 
 def _init_artefatti_db(conn):
@@ -238,6 +275,26 @@ def _migrate_artefatti_v5_assegna_su_artefatto(conn_main, conn_art):
     cur_main.execute("DELETE FROM equipaggiamento")
     conn_main.commit()
     cur.execute("PRAGMA user_version = 5")
+    conn_art.commit()
+
+
+def _migrate_artefatti_v6_meta_custom(conn_art):
+    """Colonne audit per righe manufatto (predisposizione Approccio A/B)."""
+    cur = conn_art.cursor()
+    cur.execute("PRAGMA user_version")
+    uv = cur.fetchone()[0] or 0
+    if uv >= 6:
+        return
+    for stmt in (
+        "ALTER TABLE artefatti ADD COLUMN origine_riga TEXT DEFAULT 'ufficiale'",
+        "ALTER TABLE artefatti ADD COLUMN data_custom_riga TEXT",
+        "ALTER TABLE artefatti ADD COLUMN nota_custom_riga TEXT",
+    ):
+        try:
+            cur.execute(stmt)
+        except sqlite3.OperationalError:
+            pass
+    cur.execute("PRAGMA user_version = 6")
     conn_art.commit()
 
 

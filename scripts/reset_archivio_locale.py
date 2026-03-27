@@ -37,7 +37,7 @@ def main() -> None:
             print(f"Errore su {p}: {e}", file=sys.stderr)
             sys.exit(1)
     print("\nArchivio locale vuoto. Al prossimo avvio i file ricompiono con schema vuoto.")
-    print("(Il menu «Cerca nome» in Personaggio mostra ancora il catalogo Hoyolab: è normale finché non salvi schede.)")
+    print("(Il menu «Cerca nome» in Personaggio include suggerimenti dal catalogo interno.)")
 
 
 if __name__ == "__main__":

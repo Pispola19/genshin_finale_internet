@@ -12,19 +12,19 @@
     <div class="nav-pages">
       <a href="personaggio.html">Personaggio</a>
       <a href="artefatti.html">Manufatti</a>
+      <a href="ottimizzazione.html">Ottimizzazione</a>
       <a href="build.html">Build Analysis</a>
       <a href="rotation.html">Rotazione</a>
       <a href="team.html">Team Builder</a>
       <a href="dashboard.html">Dashboard</a>
-      <a href="personaggio.html#import" class="nav-import">Import</a>
       <a href="istruzioni.html">Come si usa</a>
-      <a href="https://www.hoyolab.com/home" class="nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
+      <a href="https://www.hoyolab.com/home" class="nav-login nav-hoyolab" target="_blank" rel="noopener noreferrer">HoYoLAB</a>
     </div>
   </nav>
 
   <div class="page-personaggio">
     <main class="personaggio-main section" style="max-width: 28rem; margin: 2rem auto;">
-      <h1 style="margin-bottom: 0.5rem;">Accesso modifiche</h1>
+      <h1 style="margin-bottom: 0.5rem;">Accesso</h1>
       <p id="authHint" class="page-hint" style="margin-bottom: 1.25rem;"></p>
       <form id="loginForm" class="section" style="padding: 1.25rem;">
         <div class="form-group">
@@ -65,20 +65,25 @@
     const r = await fetch(API.replace(/\/$/, "") + "/auth/status", { credentials: "same-origin" });
     const d = await r.json();
     if (!d.write_auth_required) {
-      const s1 = document.createElement("span");
-      s1.innerHTML = "Su questo server <strong>non è attiva</strong> la password per le modifiche: salva e import funzionano senza login. ";
-      const s2 = document.createElement("span");
-      s2.textContent = "Per proteggere i dati su Internet, imposta su Render la variabile GENSHIN_WEB_WRITE_PASSWORD (e SECRET_KEY per la sessione).";
-      hint.appendChild(s1);
-      hint.appendChild(s2);
       form.style.display = "none";
+      const base = document.createElement("span");
+      base.innerHTML =
+        "Modalità <strong>locale</strong>: password non configurata — puoi usare subito Personaggio e Manufatti senza login.";
+      hint.appendChild(base);
+      const br = document.createElement("br");
+      const a = document.createElement("a");
+      a.href = nextUrl;
+      a.textContent = "Vai all’app";
+      a.style.fontWeight = "600";
+      hint.appendChild(br);
+      hint.appendChild(a);
       return;
     }
     form.style.display = "block";
     const base = document.createElement("span");
     base.innerHTML =
-      "Inserisci la <strong>password web</strong> impostata sul server per <strong>salvare</strong>, <strong>importare JSON</strong> e <strong>modificare manufatti</strong>. " +
-      "La password resta solo tra browser e tuo server; non è nel codice JavaScript pubblico.";
+      "Inserisci la <strong>password web</strong> (unica per questa installazione) per <strong>vedere e modificare</strong> tutti i dati: personaggi, manufatti, dashboard e build. " +
+      "Senza sessione valida le API non restituiscono dati. La password non è nel JavaScript pubblico.";
     hint.appendChild(base);
     if (d.authenticated) {
       const br = document.createElement("br");
