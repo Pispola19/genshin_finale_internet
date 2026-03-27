@@ -21,8 +21,8 @@ SESSION_WRITE_KEY = "gm_web_write"
 
 
 def write_password_configured() -> bool:
-    """True se è impostata una password non vuota (sessione richiesta per le API)."""
-    return len((os.environ.get("GENSHIN_WEB_WRITE_PASSWORD") or "").strip()) > 0
+    """Login web disattivato temporaneamente: API accessibili senza sessione."""
+    return False
 
 
 def session_write_ok() -> bool:
