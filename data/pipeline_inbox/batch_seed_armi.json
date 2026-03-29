@@ -1,0 +1,47 @@
+{
+  "armi": [
+    {
+      "nome": "Lama celeste",
+      "tipo": "Spada",
+      "rarita": 5,
+      "atk_base": 608,
+      "stat_secondaria": "ER%",
+      "valore_stat": 55.1
+    },
+    {
+      "nome": "Arco di Amos",
+      "tipo": "Arco",
+      "rarita": 5,
+      "atk_base": 608,
+      "stat_secondaria": "ATK%",
+      "valore_stat": 49.6
+    },
+    {
+      "nome": "Bastone di Homa",
+      "tipo": "Lancia",
+      "rarita": 5,
+      "atk_base": 608,
+      "stat_secondaria": "CR%",
+      "valore_stat": 66.2
+    },
+    {
+      "nome": "Aquila Favonia",
+      "tipo": "Spada",
+      "rarita": 5,
+      "atk_base": 674,
+      "stat_secondaria": "ATK%",
+      "valore_stat": 41.3
+    },
+    {
+      "nome": "Aqua simulacra",
+      "tipo": "Arco",
+      "rarita": 5,
+      "atk_base": 542,
+      "stat_secondaria": "CD%",
+      "valore_stat": 88.2
+    }
+  ],
+  "_meta": {
+    "source": "tools.pipeline.export_from_catalog.ARMI_SEED"
+  }
+}

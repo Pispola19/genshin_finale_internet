@@ -1,0 +1,83 @@
+{
+  "manufatti": [
+    {
+      "set": "Avventuriere",
+      "slot": "fiore",
+      "pezzo": "Fiore dell'avventuriere"
+    },
+    {
+      "set": "Avventuriere",
+      "slot": "piuma",
+      "pezzo": "Piuma dell'avventuriere"
+    },
+    {
+      "set": "Avventuriere",
+      "slot": "sabbie",
+      "pezzo": "Orologio dell'avventuriere"
+    },
+    {
+      "set": "Avventuriere",
+      "slot": "calice",
+      "pezzo": "Calice d'oro dell'avventuriere"
+    },
+    {
+      "set": "Avventuriere",
+      "slot": "corona",
+      "pezzo": "Bandana dell'avventuriere"
+    },
+    {
+      "set": "Roccia arcaica",
+      "slot": "fiore",
+      "pezzo": "Fiore rupestre"
+    },
+    {
+      "set": "Roccia arcaica",
+      "slot": "piuma",
+      "pezzo": "Piuma dei picchi aguzzi"
+    },
+    {
+      "set": "Roccia arcaica",
+      "slot": "sabbie",
+      "pezzo": "Meridiana di giada perenne"
+    },
+    {
+      "set": "Roccia arcaica",
+      "slot": "calice",
+      "pezzo": "Calice di falesia"
+    },
+    {
+      "set": "Roccia arcaica",
+      "slot": "corona",
+      "pezzo": "Maschera di basalto inerte"
+    },
+    {
+      "set": "Berserker",
+      "slot": "fiore",
+      "pezzo": "Rosa del berserker"
+    },
+    {
+      "set": "Berserker",
+      "slot": "piuma",
+      "pezzo": "Piuma blu del berserker"
+    },
+    {
+      "set": "Berserker",
+      "slot": "sabbie",
+      "pezzo": "Clessidra del berserker"
+    },
+    {
+      "set": "Berserker",
+      "slot": "calice",
+      "pezzo": "Calice d'osso del berserker"
+    },
+    {
+      "set": "Berserker",
+      "slot": "corona",
+      "pezzo": "Maschera da guerra del berserker"
+    }
+  ],
+  "_meta": {
+    "source": "core.manufatti_ufficiali",
+    "sets": 3
+  }
+}

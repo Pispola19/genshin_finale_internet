@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "comment": "Parametri strategici della pipeline — modificare qui dopo decisione del capoprogetto. Valori null o assenti = soglia non applicata.",
+  "min_ingests_per_calendar_week": 2,
+  "min_records_sum_per_calendar_week": 30,
+  "max_mean_warnings_per_ingest": 3.0,
+  "min_approval_rate_percent": 25,
+  "sprint_priority_order": ["manufatti", "armi", "personaggi"],
+  "sprint_note": "Ordine predefinito quando non c'è uno sprint dedicato; per uno sprint specifico usare --source (es. sprint-manufatti-202603) e annotare in riunione."
+}

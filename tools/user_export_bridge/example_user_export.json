@@ -1,0 +1,29 @@
+{
+  "user_export_version": 1,
+  "origin_note": "Esempio minimale — sostituire con dati reali da export consentito.",
+  "personaggi": [
+    {
+      "nome": "Hu Tao",
+      "elemento": "Pyro",
+      "arma": "Lancia",
+      "base_stats": {}
+    }
+  ],
+  "armi": [
+    {
+      "nome": "Lama celeste",
+      "tipo": "Spada",
+      "rarita": 5,
+      "atk_base": 608,
+      "stat_secondaria": "ER%",
+      "valore_stat": 55.1
+    }
+  ],
+  "manufatti": [
+    {
+      "set": "Emblema del fato spezzato",
+      "slot": "fiore",
+      "pezzo": "Tsuba poderosa"
+    }
+  ]
+}

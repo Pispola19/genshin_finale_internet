@@ -10,6 +10,14 @@
   --accent-soft: rgba(107, 125, 232, 0.18);
   --accent-mint: #34a989;
   --accent-amber: #d69e2e;
+  /* Focus modulo manufatti (Archivio → Crea): alto contrasto senza toccare il resto dell’app */
+  --focus-manufatto-ring: #c9a00a;
+  --focus-manufatto-ring-soft: #e8c040;
+  --focus-manufatto-glow: rgba(201, 160, 10, 0.38);
+  /* Focus scheda Personaggio (page-personaggio): rosso distinto da manufatti (oro) e da --danger */
+  --focus-personaggio-ring: #c53030;
+  --focus-personaggio-ring-soft: #f18a8a;
+  --focus-personaggio-glow: rgba(197, 48, 48, 0.34);
   --text: #1e1b2e;
   --text-muted: #6b6a7a;
   --text-strong: #151228;
@@ -898,6 +906,31 @@ input:focus, select:focus {
   outline: none;
   border-color: rgba(120, 130, 200, 0.75);
   box-shadow: none;
+}
+
+/* Modulo «Crea nuovo manufatto»: campo attivo molto visibile (bordo oro + glow) */
+.inv-add-form input:focus,
+.inv-add-form select:focus,
+.inv-add-form textarea:focus {
+  outline: none;
+  border-color: var(--focus-manufatto-ring);
+  box-shadow:
+    0 0 0 2px var(--focus-manufatto-ring-soft),
+    0 0 14px 3px var(--focus-manufatto-glow);
+}
+
+/*
+ * Scheda Personaggio: focus evidenziato (rosso), schema come manufatti (oro).
+ * `main.personaggio-main:not(.section)` = solo personaggio.html (login riusa `.personaggio-main.section`).
+ */
+main.personaggio-main:not(.section) input:focus,
+main.personaggio-main:not(.section) select:focus,
+main.personaggio-main:not(.section) textarea:focus {
+  outline: none;
+  border-color: var(--focus-personaggio-ring);
+  box-shadow:
+    0 0 0 2px var(--focus-personaggio-ring-soft),
+    0 0 14px 3px var(--focus-personaggio-glow);
 }
 
 input[type="number"] { width: 70px; }

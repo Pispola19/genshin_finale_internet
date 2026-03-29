@@ -1,0 +1,29 @@
+{
+  "personaggi": [
+    {
+      "nome": "  RAIDEN SHOGUN  ",
+      "elemento": "Electro",
+      "arma": "polearm",
+      "base_stats": { "hp": 12907, "atk": 337, "def": 789 }
+    }
+  ],
+  "armi": [
+    {
+      "nome": "Engulfing Lightning",
+      "tipo": "Polearm",
+      "rarita": 5,
+      "atk_base": 608,
+      "stat_secondaria": "ER%",
+      "valore_stat": 55.1
+    }
+  ],
+  "manufatti": [
+    {
+      "set": "  EMBLEM OF SEVERED FATE ",
+      "slot": "sands",
+      "pezzo": "Sands of eon",
+      "bonus_2p": "Energy Recharge +20%",
+      "bonus_4p": "Elemental Burst DMG increased by Energy Recharge"
+    }
+  ]
+}

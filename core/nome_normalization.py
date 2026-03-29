@@ -14,6 +14,17 @@ def norm_key_nome(nome: str) -> str:
     return " ".join((nome or "").split()).lower()
 
 
+def normalize_manufatto_display_label(s: str) -> str:
+    """
+    Etichetta set/pezzo manufatto: prima lettera maiuscola, resto minuscolo (stringa intera).
+    Spazi esterni e ripetuti normalizzati.
+    """
+    t = " ".join((s or "").split())
+    if not t:
+        return t
+    return t[0].upper() + t[1:].lower()
+
+
 def canonicalizza_nome_personaggio(nome: str) -> str:
     """
     Strip, collassa spazi; se corrisponde a whitelist/registry (case-insensitive),

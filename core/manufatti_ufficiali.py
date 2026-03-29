@@ -7,6 +7,7 @@ a ogni patch con nuovi set; ``PATCH_MANUFATTI`` indica l’ultimo allineamento.
 Convenzioni:
   * Mantenere esattamente le stringhe del gioco (maiuscole, apostrofi).
   * Ogni riga: ``(nome_set, (fiore, piuma, sabbie, calice, corona))``.
+  * Suggerimenti aggiuntivi (alias EN, ecc.) senza duplicare il canonico: dati in ``core/manufatti_pezzi_en_by_fingerprint.py``, wiring in ``core/manufatti_pezzi_suggerimenti_extra.py``.
 """
 from __future__ import annotations
 
@@ -21,9 +22,10 @@ SLOT_ORDER: Tuple[str, ...] = ("fiore", "piuma", "sabbie", "calice", "corona")
 MAIN_STATS_PER_SLOT: Dict[str, List[str]] = {
     "fiore": ["HP"],
     "piuma": ["ATK"],
-    "sabbie": ["HP%", "ATK%", "DEF%", "EM", "ER"],
+    "sabbie": ["HP%", "ATK", "ATK%", "DEF%", "EM", "ER"],
     "calice": [
         "HP%",
+        "ATK",
         "ATK%",
         "DEF%",
         "EM",
@@ -36,7 +38,7 @@ MAIN_STATS_PER_SLOT: Dict[str, List[str]] = {
         "Dendro DMG",
         "Physical DMG",
     ],
-    "corona": ["HP%", "ATK%", "DEF%", "EM", "CR%", "CD%", "Healing Bonus"],
+    "corona": ["HP%", "ATK", "ATK%", "DEF%", "EM", "CR%", "CD%", "Healing Bonus"],
 }
 
 CATALOGO_ARTEFATTI: List[Tuple[str, Tuple[str, str, str, str, str]]] = [

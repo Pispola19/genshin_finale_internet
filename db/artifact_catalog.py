@@ -3,7 +3,7 @@ Funzioni catalogo manufatti: builtin in ``core.manufatti_ufficiali`` ∪ set app
 """
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from core.custom_registry import approved_sets_as_catalog_tuples
 from core.manufatti_ufficiali import (
@@ -80,12 +80,22 @@ def filtra_progressivo(
     set_partial: str = "",
     nome_partial: str = "",
     main_stat: str = "",
+    extra_pairs: Optional[List[Tuple[str, str]]] = None,
 ) -> List[Tuple[str, str]]:
     """
     Filtraggio progressivo: set_partial, nome_partial, main_stat riducono la lista.
     Ritorna [(set_nome, nome_pezzo), ...].
+    Se ``extra_pairs`` è valorizzato, unisce coppie (set, pezzo) aggiuntive (es. da DB).
     """
-    candidati = filtra_per_slot(slot)
+    candidati = list(filtra_per_slot(slot))
+    if extra_pairs:
+        seen = {(a.lower(), b.lower()) for a, b in candidati}
+        for s, n in extra_pairs:
+            key = (s.lower(), n.lower())
+            if key not in seen:
+                seen.add(key)
+                candidati.append((s, n))
+        candidati.sort(key=lambda x: (x[0].lower(), x[1].lower()))
     set_lower = set_partial.strip().lower()
     nome_lower = nome_partial.strip().lower()
     main_lower = main_stat.strip().lower()

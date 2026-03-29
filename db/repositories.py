@@ -6,6 +6,62 @@ from core.nome_normalization import norm_key_nome
 from db.models import Personaggio, Arma, Artefatto, Costellazioni, Talenti
 
 
+class CatalogoManufattiEstensioniRepository:
+    """Set/pezzo aggiunti dall'utente (tabella su database artefatti, v7+)."""
+
+    @staticmethod
+    def insert_ignore(conn: sqlite3.Connection, set_nome: str, slot: str, nome_pezzo: str) -> None:
+        sk = norm_key_nome(set_nome)
+        pk = norm_key_nome(nome_pezzo)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO catalogo_manufatti_estensioni
+            (set_nome, slot, nome_pezzo, set_key, pezzo_key)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (set_nome, slot, nome_pezzo, sk, pk),
+        )
+        conn.commit()
+
+    @staticmethod
+    def distinct_set_nomi(conn: sqlite3.Connection) -> List[str]:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT set_nome FROM catalogo_manufatti_estensioni ORDER BY lower(set_nome)"
+        )
+        seen: set[str] = set()
+        out: List[str] = []
+        for (sn,) in cur.fetchall():
+            k = norm_key_nome(sn)
+            if k not in seen:
+                seen.add(k)
+                out.append(sn)
+        return out
+
+    @staticmethod
+    def pezzi_for_set_slot(conn: sqlite3.Connection, set_nome: str, slot: str) -> List[str]:
+        sk = norm_key_nome(set_nome)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT nome_pezzo FROM catalogo_manufatti_estensioni
+            WHERE set_key=? AND slot=? ORDER BY lower(nome_pezzo)
+            """,
+            (sk, slot),
+        )
+        return [r[0] for r in cur.fetchall()]
+
+    @staticmethod
+    def pairs_for_slot(conn: sqlite3.Connection, slot: str) -> List[Tuple[str, str]]:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT set_nome, nome_pezzo FROM catalogo_manufatti_estensioni WHERE slot=?",
+            (slot,),
+        )
+        return [(r[0], r[1]) for r in cur.fetchall()]
+
+
 class PersonaggioRepository:
     """Operazioni CRUD personaggi."""
 

@@ -10,7 +10,6 @@ from core.nome_normalization import canonicalizza_nome_arma, canonicalizza_nome_
 from core.nomi_whitelist import (
     WHITELIST_ARMI_EFFECTIVE,
     WHITELIST_PERSONAGGI_EFFECTIVE,
-    WHITELIST_SET_MANUFATTI,
 )
 
 _LOG = logging.getLogger(__name__)
@@ -112,31 +111,24 @@ def validate_arma_nome(nome: str, *, custom_confirm: bool = False) -> Tuple[bool
     return True, ""
 
 
-def validate_artefatto_set_e_pezzo(set_nome: str, nome_pezzo: str, slot: str) -> Tuple[bool, str]:
-    """Set e nome pezzo manufatto: obbligatori e coerenti con catalogo (ufficiali ∪ set approvati nel registry)."""
-    from db.artifact_catalog import SLOT_ORDER, pezzi_catalogo_per_set_e_slot
+def validate_artefatto_set_e_pezzo(
+    set_nome: str,
+    nome_pezzo: str,
+    slot: str,
+    *,
+    conn_art,
+) -> Tuple[bool, str]:
+    """
+    Set e pezzo: obbligatori, solo testo latino, coerenti con catalogo statico ∪ estensioni DB;
+    blocca il nome di un pezzo ufficiale se usato nello slot sbagliato.
+    ``conn_art``: connessione SQLite database artefatti (stesso thread AppService).
+    """
+    from core.manufatto_catalog_resolve import resolve_manufatto_set_pezzo_for_save
 
-    s = (set_nome or "").strip()
-    n = (nome_pezzo or "").strip()
-    slot_clean = (slot or "fiore").strip().lower()
-    if slot_clean not in SLOT_ORDER:
-        slot_clean = "fiore"
-    if not s:
-        return False, "Il set manufatti è obbligatorio."
-    ok, msg = validate_testo_nome_visualizzabile(s)
-    if not ok:
-        return False, f"Set manufatti: {msg}"
-    if s not in WHITELIST_SET_MANUFATTI:
-        return False, "Il set deve essere nell'elenco del catalogo (ufficiale o approvato nel registry esterno)."
-    if not n:
-        return False, "Il nome del pezzo è obbligatorio."
-    ok, msg = validate_testo_nome_visualizzabile(n)
-    if not ok:
-        return False, f"Nome pezzo: {msg}"
-    allowed = pezzi_catalogo_per_set_e_slot(s, slot_clean)
-    if n not in allowed:
-        return (
-            False,
-            "Il nome del pezzo non corrisponde al set e allo slot (catalogo ufficiale / registry approvato).",
+    try:
+        resolve_manufatto_set_pezzo_for_save(
+            conn_art, set_nome or "", nome_pezzo or "", slot or "fiore", register_extension=False
         )
+    except ValueError as e:
+        return False, str(e)
     return True, ""

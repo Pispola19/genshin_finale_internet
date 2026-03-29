@@ -352,41 +352,33 @@ function fillSelect(sel, items, emptyLabel) {
   }
 }
 
-/** Set: solo menu catalogo ufficiale. */
-function resolveSetNome() {
-  const sel = document.getElementById("set_nome");
-  return sel && sel.value ? String(sel.value).trim() : "";
+function fillDatalistOptions(dlId, items) {
+  const dl = document.getElementById(dlId);
+  if (!dl) return;
+  dl.innerHTML = (items || []).map(t => `<option value="${escapeAttr(String(t))}"></option>`).join("");
 }
 
-function fillNomePezzoOptions(pezzi) {
-  const sel = document.getElementById("nome_pezzo");
-  if (!sel) return;
-  sel.replaceChildren();
-  const ph = document.createElement("option");
-  ph.value = "";
-  ph.textContent = pezzi.length ? "— Scegli pezzo —" : "— Nessun nome in catalogo —";
-  sel.appendChild(ph);
-  for (const text of pezzi) {
-    const o = document.createElement("option");
-    o.value = text;
-    o.textContent = text;
-    sel.appendChild(o);
-  }
-  if (pezzi.length === 1) sel.value = pezzi[0];
+/** Set: testo libero o suggerimento datalist. */
+function resolveSetNome() {
+  const el = document.getElementById("set_nome");
+  return el && el.value ? String(el.value).trim() : "";
+}
+
+function fillNomePezzoDatalist(pezzi) {
+  fillDatalistOptions("datalist_nome_pezzo", pezzi);
+  const inp = document.getElementById("nome_pezzo");
+  if (!inp) return;
+  if (pezzi.length === 1) inp.value = pezzi[0];
 }
 
 async function refreshPezzoSelect() {
-  const setSel = document.getElementById("set_nome");
+  const setInp = document.getElementById("set_nome");
   const slotEl = document.getElementById("slot");
-  const selPezzo = document.getElementById("nome_pezzo");
-  if (!setSel || !slotEl || !selPezzo) return;
+  const pezzoInp = document.getElementById("nome_pezzo");
+  if (!setInp || !slotEl || !pezzoInp) return;
   const setNome = resolveSetNome();
   if (!setNome) {
-    selPezzo.replaceChildren();
-    const ph = document.createElement("option");
-    ph.value = "";
-    ph.textContent = "— Scegli prima il set —";
-    selPezzo.appendChild(ph);
+    fillDatalistOptions("datalist_nome_pezzo", []);
     return;
   }
   try {
@@ -395,16 +387,16 @@ async function refreshPezzoSelect() {
     );
     const j = await r.json();
     const pezzi = Array.isArray(j.pezzi) ? j.pezzi : [];
-    fillNomePezzoOptions(pezzi);
+    fillNomePezzoDatalist(pezzi);
   } catch {
-    fillNomePezzoOptions([]);
+    fillDatalistOptions("datalist_nome_pezzo", []);
   }
 }
 
 function resolveNomePezzo() {
-  const pezzoSel = document.getElementById("nome_pezzo");
-  if (!pezzoSel || !pezzoSel.value) return "";
-  return String(pezzoSel.value).trim();
+  const pezzoInp = document.getElementById("nome_pezzo");
+  if (!pezzoInp || !pezzoInp.value) return "";
+  return String(pezzoInp.value).trim();
 }
 
 async function loadCatalogo(slot) {
@@ -423,19 +415,12 @@ async function loadCatalogo(slot) {
       return;
     }
     catalogo = j;
-    const setSel = document.getElementById("set_nome");
+    const setInp = document.getElementById("set_nome");
     const mainSel = document.getElementById("main_stat");
-    if (!setSel || !mainSel) return;
-    const prevSet = setSel.value;
-    fillSelect(setSel, catalogo.set || [], "— Scegli set —");
-    if (prevSet) {
-      for (const o of setSel.options) {
-        if (o.value === prevSet) {
-          setSel.value = prevSet;
-          break;
-        }
-      }
-    }
+    if (!setInp || !mainSel) return;
+    const prevSet = setInp.value;
+    fillDatalistOptions("datalist_set_nome", catalogo.set || []);
+    if (prevSet) setInp.value = prevSet;
     fillSelect(mainSel, catalogo.main_stats || [], "—");
     document.querySelectorAll(".sub_stat").forEach(sel => {
       fillSelect(sel, catalogo.stats_subs || [], "—");
@@ -487,7 +472,7 @@ function updateFormEditUI() {
   if (slotHint) slotHint.hidden = !editingAssigned;
 }
 
-function resetForm() {
+async function resetForm() {
   editingId = null;
   editingAssigned = false;
   updateFormEditUI();
@@ -495,12 +480,15 @@ function resetForm() {
   document.getElementById("stelle").value = "5";
   document.getElementById("main_val").value = "";
   document.getElementById("slot").value = "fiore";
-  document.getElementById("set_nome").value = "";
+  const sn = document.getElementById("set_nome");
+  const np = document.getElementById("nome_pezzo");
+  if (sn) sn.value = "";
+  if (np) np.value = "";
   document.getElementById("assegn_a_personaggio").value = "";
   document.querySelectorAll(".sub_val").forEach(el => {
     el.value = "";
   });
-  void loadCatalogo("fiore");
+  await loadCatalogo("fiore");
 }
 
 async function caricaNelModulo(aid) {
@@ -519,44 +507,12 @@ async function caricaNelModulo(aid) {
   document.getElementById("slot").value = slot;
   await loadCatalogo(slot);
   const rawSet = (d.set_nome || "").trim();
-  const setSel = document.getElementById("set_nome");
-  let inCatalog = false;
-  if (setSel && rawSet) {
-    for (const o of setSel.options) {
-      if (o.value === rawSet) {
-        setSel.value = rawSet;
-        inCatalog = true;
-        break;
-      }
-    }
-  }
-  if (!inCatalog && rawSet) {
-    window.alert(
-      "Il set salvato non è nell’elenco ufficiale. Scegli un set dal catalogo per modificare o salvare questo pezzo."
-    );
-    if (setSel) setSel.value = "";
-  } else if (setSel && !rawSet) {
-    setSel.value = "";
-  }
+  const setInp = document.getElementById("set_nome");
+  if (setInp) setInp.value = rawSet;
   await refreshPezzoSelect();
-  const nomeSel = document.getElementById("nome_pezzo");
   const nomeVal = (d.nome || "").trim();
-  let found = false;
-  if (nomeSel) {
-    for (const o of nomeSel.options) {
-      if (o.value === nomeVal) {
-        nomeSel.value = nomeVal;
-        found = true;
-        break;
-      }
-    }
-    if (!found && nomeVal) {
-      window.alert(
-        "Il nome pezzo salvato non corrisponde al catalogo per questo set/slot. Scegli un pezzo dal menu."
-      );
-      nomeSel.value = "";
-    }
-  }
+  const nomeInp = document.getElementById("nome_pezzo");
+  if (nomeInp) nomeInp.value = nomeVal;
   setSelectValue(document.getElementById("main_stat"), d.main_stat);
   document.getElementById("main_val").value = d.main_val != null && d.main_val !== "" ? d.main_val : "";
   document.getElementById("livello").value = d.livello != null ? d.livello : 20;
@@ -855,7 +811,7 @@ async function eliminaManufatto(aid) {
     alert("Errore: " + (res.error || r.status));
     return;
   }
-  if (editingId === aid) resetForm();
+  if (editingId === aid) await resetForm();
   modalInfoClose();
   await loadMagazzino();
   maybeRefreshEquipIfVisible();
@@ -914,7 +870,7 @@ async function salvaModuloManufatto() {
       alert("Errore: " + (res.error || r.status));
       return;
     }
-    resetForm();
+    await resetForm();
     await loadMagazzino();
     maybeRefreshEquipIfVisible();
     return;
@@ -939,14 +895,19 @@ async function salvaModuloManufatto() {
     return;
   }
   alert(rawPid ? "Manufatto aggiunto ed equipaggiato al personaggio scelto." : "Manufatto aggiunto al magazzino (libero).");
+  await resetForm();
   await loadMagazzino();
   maybeRefreshEquipIfVisible();
 }
 
 document.getElementById("slot").addEventListener("change", () => loadCatalogo(document.getElementById("slot").value));
-document.getElementById("set_nome").addEventListener("change", () => refreshPezzoSelect());
+const setNomeEl = document.getElementById("set_nome");
+if (setNomeEl) {
+  setNomeEl.addEventListener("change", () => void refreshPezzoSelect());
+  setNomeEl.addEventListener("blur", () => void refreshPezzoSelect());
+}
 document.getElementById("btnAggiungi").addEventListener("click", () => void salvaModuloManufatto());
-document.getElementById("btnAnnullaForm")?.addEventListener("click", () => resetForm());
+document.getElementById("btnAnnullaForm")?.addEventListener("click", () => void resetForm());
 document.getElementById("btnEliminaForm")?.addEventListener("click", () => {
   if (!editingId) return;
   void eliminaManufatto(editingId);

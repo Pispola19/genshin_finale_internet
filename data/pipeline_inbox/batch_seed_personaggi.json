@@ -1,0 +1,67 @@
+{
+  "personaggi": [
+    {
+      "nome": "Hu Tao",
+      "elemento": "Pyro",
+      "arma": "Lancia",
+      "base_stats": {}
+    },
+    {
+      "nome": "Raiden Shogun",
+      "elemento": "Electro",
+      "arma": "Lancia",
+      "base_stats": {}
+    },
+    {
+      "nome": "Furina",
+      "elemento": "Hydro",
+      "arma": "Spada",
+      "base_stats": {}
+    },
+    {
+      "nome": "Nahida",
+      "elemento": "Dendro",
+      "arma": "Catalizzatore",
+      "base_stats": {}
+    },
+    {
+      "nome": "Kazuha",
+      "elemento": "Anemo",
+      "arma": "Spada",
+      "base_stats": {}
+    },
+    {
+      "nome": "Ganyu",
+      "elemento": "Cryo",
+      "arma": "Arco",
+      "base_stats": {}
+    },
+    {
+      "nome": "Zhongli",
+      "elemento": "Geo",
+      "arma": "Lancia",
+      "base_stats": {}
+    },
+    {
+      "nome": "Bennett",
+      "elemento": "Pyro",
+      "arma": "Spada",
+      "base_stats": {}
+    },
+    {
+      "nome": "Yelan",
+      "elemento": "Hydro",
+      "arma": "Arco",
+      "base_stats": {}
+    },
+    {
+      "nome": "Albedo",
+      "elemento": "Geo",
+      "arma": "Spada",
+      "base_stats": {}
+    }
+  ],
+  "_meta": {
+    "source": "tools.pipeline.export_from_catalog.PERSONAGGI_SEED"
+  }
+}

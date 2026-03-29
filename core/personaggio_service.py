@@ -372,13 +372,32 @@ class PersonaggioService:
     def _parse_arma(self, f: dict) -> dict:
         def n(k, default=0):
             return parse_number(f.get(k), default=default) or default
+
+        raw_stat = (f.get("stat_secondaria") or "").strip()
+        st_up = raw_stat.upper().replace(" ", "_")
+        if raw_stat and (
+            st_up
+            in (
+                "ER",
+                "ER%",
+                "ENERGY_RECHARGE",
+                "RICARICA_ENERGIA",
+                "ENERGY_RECHARGE%",
+            )
+            or "ENERGY_RECHARGE" in st_up
+            or st_up.startswith("RICARICA")
+        ):
+            canon_stat = "ER%"
+        else:
+            canon_stat = raw_stat
+
         return {
             "nome": (f.get("nome") or "").strip(),
             "tipo": f.get("tipo") or "Spada",
             "livello": n("livello", 1),
             "stelle": n("stelle", 5),
             "atk_base": n("atk_base"),
-            "stat_secondaria": f.get("stat_secondaria") or "",
+            "stat_secondaria": canon_stat,
             "valore_stat": parse_number(f.get("valore_stat")),
         }
 

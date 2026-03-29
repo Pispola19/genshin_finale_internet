@@ -10,3 +10,6 @@ user_artifact_sets.json
 checkpoints/
 # Stato form GUI (ripristino dopo chiusura)
 checkpoint.json
+# Log import pipeline (opzionale: non versionare)
+data/pipeline_logs/*.jsonl
+data/pipeline_inbox/.ingest_manifest.json

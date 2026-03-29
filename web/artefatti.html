@@ -74,16 +74,21 @@
       </div>
       <div class="form-row inv-set-dual-row">
         <div class="form-group form-group-stack form-group-grow inv-set-col-catalogo">
-          <label for="set_nome">Set (catalogo ufficiale)</label>
-          <select id="set_nome" class="inv-set-select"><option value="">— Scegli set —</option></select>
+          <label for="set_nome">Set</label>
+          <input type="text" id="set_nome" class="inv-set-select" list="datalist_set_nome" autocomplete="off" placeholder="Scegli un suggerimento o scrivi un nome…" aria-label="Nome set manufatto">
+          <datalist id="datalist_set_nome"></datalist>
         </div>
       </div>
       <p class="page-hint" style="margin:0 0 0.65rem;font-size:0.82rem">
-        <strong>Set e pezzo:</strong> solo voci del catalogo interno (allineate al gioco). Dettagli in <a href="istruzioni.html#manufatti-set-compilare">Come si usa</a>.
+        <strong>Set e pezzo:</strong> suggerimenti dal catalogo; puoi <strong>scrivere</strong> set o pezzo nuovi: vengono normalizzati e salvati nel database per i prossimi utilizzi. <a href="istruzioni.html#manufatti-set-compilare">Come si usa</a>.
       </p>
       <div class="form-group form-group-stack">
         <label for="nome_pezzo">Nome pezzo</label>
-        <select id="nome_pezzo" class="inv-set-select"><option value="">— Scegli prima il set —</option></select>
+        <input type="text" id="nome_pezzo" class="inv-set-select" list="datalist_nome_pezzo" autocomplete="off" placeholder="Suggerimenti per il set e slot scelti, oppure testo libero…" aria-label="Nome pezzo manufatto">
+        <datalist id="datalist_nome_pezzo"></datalist>
+        <p class="page-hint" style="margin:0.35rem 0 0;font-size:0.8rem;color:var(--text-muted)">
+          I suggerimenti sono in <strong>italiano</strong> (nome ufficiale). Puoi anche <strong>scrivere a mano</strong> (es. nome del client in inglese): al salvataggio viene ricondotto al pezzo ufficiale IT se riconosciuto. I cinque pezzi del set sono su slot diversi: per un set completo usa <strong>AGGIUNGI</strong> cinque volte cambiando <strong>Slot</strong>.
+        </p>
       </div>
       <div class="form-row inv-main-row">
         <div class="form-group form-group-main">

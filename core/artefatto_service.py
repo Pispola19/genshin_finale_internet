@@ -5,18 +5,20 @@ Tutte le chiamate ai Repository per artefatti passano da qui.
 from typing import Optional, List, Tuple, Dict, Any
 
 from core.dps import DpsCalculator, build_dps_result_artefatto_index
-from core.validation import validate_artefatto_set_e_pezzo
 from core.dps_types import DpsResult, dps_result_to_message_it
+from core.manufatto_catalog_resolve import (
+    merged_lista_set,
+    merged_pezzi_per_set_slot,
+    resolve_manufatto_set_pezzo_for_save,
+)
 from config import SLOT_DB
 from db.artifact_catalog import (
     filtra_progressivo,
-    lista_set,
-    pezzi_catalogo_per_set_e_slot,
     MAIN_STATS_PER_SLOT,
     cerca_nome_pezzo,
 )
 from db.connection import get_connection, get_artefatti_connection
-from db.repositories import ArtefattoRepository, PersonaggioRepository
+from db.repositories import ArtefattoRepository, CatalogoManufattiEstensioniRepository, PersonaggioRepository
 
 _OTTIM_SLOT_LABEL_IT = {
     "fiore": "Fiore",
@@ -280,9 +282,13 @@ class ArtefattoService:
         )
         set_n = (dati[1] or "").strip()
         nome_pz = (dati[2] or "").strip()
-        ok_n, err_n = validate_artefatto_set_e_pezzo(set_n, nome_pz, slot_in)
-        if not ok_n:
-            raise ValueError(err_n)
+        try:
+            set_c, pezzo_c = resolve_manufatto_set_pezzo_for_save(
+                self._art_conn(), set_n, nome_pz, slot_in, register_extension=True
+            )
+        except ValueError as e:
+            raise ValueError(str(e)) from e
+        dati = (slot_in, set_c, pezzo_c, *dati[3:])
         ArtefattoRepository.update(self._art_conn(), artefatto_id, dati)
         if "personaggio_id" in form_values:
             raw_pid = form_values.get("personaggio_id")
@@ -403,12 +409,13 @@ class ArtefattoService:
 
     # --- Catalogo (filtraggio progressivo) ---
     def set_per_slot(self, slot: str) -> List[str]:
-        """Tutti i nomi set del catalogo (ogni set ha i 5 pezzi; elenco uguale per ogni slot)."""
-        return lista_set()
+        """Nomi set: catalogo statico ∪ registry ∪ estensioni salvate sul DB artefatti."""
+        del slot  # stesso elenco per ogni slot
+        return merged_lista_set(self._art_conn())
 
     def pezzi_catalogo_set_slot(self, set_nome: str, slot: str) -> List[str]:
-        """Nomi pezzo ufficiali per set + slot (dal catalogo in `artifact_catalog.py`)."""
-        return pezzi_catalogo_per_set_e_slot(set_nome, slot)
+        """Nomi pezzo per set + slot (ufficiale ∪ estensioni DB)."""
+        return merged_pezzi_per_set_slot(self._art_conn(), set_nome, slot)
 
     def suggerimenti_artefatto(
         self,
@@ -418,7 +425,8 @@ class ArtefattoService:
         main_stat: str = "",
     ) -> List[Tuple[str, str]]:
         """[(set_nome, nome_pezzo), ...] filtrati progressivamente."""
-        return filtra_progressivo(slot, set_partial, nome_partial, main_stat)
+        extra = CatalogoManufattiEstensioniRepository.pairs_for_slot(self._art_conn(), slot)
+        return filtra_progressivo(slot, set_partial, nome_partial, main_stat, extra_pairs=extra)
 
     def main_stats_per_slot(self, slot: str) -> List[str]:
         """Lista main stats possibili per lo slot."""
@@ -438,14 +446,17 @@ class ArtefattoService:
         slot_new = (form_values.get("slot") or "fiore").strip().lower()
         sn = (form_values.get("set_nome") or "").strip()
         np = (form_values.get("nome") or "").strip()
-        ok_n, err_n = validate_artefatto_set_e_pezzo(sn, np, slot_new)
-        if not ok_n:
-            raise ValueError(err_n)
+        try:
+            set_c, pezzo_c = resolve_manufatto_set_pezzo_for_save(
+                self._art_conn(), sn, np, slot_new, register_extension=True
+            )
+        except ValueError as e:
+            raise ValueError(str(e)) from e
 
         dati = (
             slot_new,
-            form_values.get("set_nome", ""),
-            form_values.get("nome", ""),
+            set_c,
+            pezzo_c,
             parse_number(form_values.get("livello"), default=20) or 20,
             parse_number(form_values.get("stelle"), default=5) or 5,
             form_values.get("main_stat", ""),

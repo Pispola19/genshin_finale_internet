@@ -86,6 +86,7 @@ def init_databases(conn_main, conn_artefatti):
     _migrate_artefatti_v4_reset_inventario(conn_main, conn_artefatti)
     _migrate_artefatti_v5_assegna_su_artefatto(conn_main, conn_artefatti)
     _migrate_artefatti_v6_meta_custom(conn_artefatti)
+    _migrate_artefatti_v7_catalogo_estensioni(conn_artefatti)
     _pulisci_assegna_orfani_artefatti(conn_main, conn_artefatti)
 
 
@@ -295,6 +296,32 @@ def _migrate_artefatti_v6_meta_custom(conn_art):
         except sqlite3.OperationalError:
             pass
     cur.execute("PRAGMA user_version = 6")
+    conn_art.commit()
+
+
+def _migrate_artefatti_v7_catalogo_estensioni(conn_art):
+    """Set/pezzo manufatto aggiunti dall'utente (catalogo dinamico su DB artefatti)."""
+    cur = conn_art.cursor()
+    cur.execute("PRAGMA user_version")
+    uv = cur.fetchone()[0] or 0
+    if uv >= 7:
+        return
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS catalogo_manufatti_estensioni (
+            set_nome TEXT NOT NULL,
+            slot TEXT NOT NULL CHECK(slot IN ('fiore','piuma','sabbie','calice','corona')),
+            nome_pezzo TEXT NOT NULL,
+            set_key TEXT NOT NULL,
+            pezzo_key TEXT NOT NULL,
+            UNIQUE(set_key, slot, pezzo_key)
+        )
+        """
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cat_manuf_ext_set_slot ON catalogo_manufatti_estensioni(set_key, slot)"
+    )
+    cur.execute("PRAGMA user_version = 7")
     conn_art.commit()
 
 

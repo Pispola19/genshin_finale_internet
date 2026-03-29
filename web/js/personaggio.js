@@ -40,10 +40,10 @@ const arma_stat = document.getElementById("arma_stat");
 const arma_valore = document.getElementById("arma_valore");
 const btnOnlySavedPg = document.getElementById("btnOnlySavedPg");
 
-/** Allineato a config.STATS (suggerimenti stat secondaria arma). */
+/** Allineato a config.STATS (suggerimenti stat secondaria arma; ER% = energy_recharge in calcolo). */
 const ARMA_STAT_SUGGESTIONS = [
   "HP", "HP%", "ATK", "ATK%", "DEF", "DEF%",
-  "EM", "ER", "CR", "CR%", "CD", "CD%",
+  "EM", "ER", "ER%", "Energy Recharge", "CR", "CR%", "CD", "CD%",
   "Pyro DMG", "Hydro DMG", "Electro DMG", "Cryo DMG", "Anemo DMG", "Geo DMG",
   "Dendro DMG", "Physical DMG", "Healing Bonus", "Shield Strength",
 ];

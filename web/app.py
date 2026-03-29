@@ -16,13 +16,27 @@ from web.web_write_auth import (
 
 
 def _deploy_requires_web_password() -> bool:
-    """Login web disattivato temporaneamente: nessuna password obbligatoria all'avvio."""
-    return False
+    """In produzione (Render) o se forzato, la password è obbligatoria all’avvio."""
+    if (os.environ.get("RENDER") or "").strip():
+        return True
+    return (os.environ.get("GENSHIN_WEB_FORCE_PASSWORD") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
 
 def _require_web_password_or_exit() -> None:
-    """No-op: login web temporaneamente disabilitato anche in produzione."""
-    return
+    """Locale: server può partire senza password. Host esposti: impostare GENSHIN_WEB_WRITE_PASSWORD."""
+    if not _deploy_requires_web_password():
+        return
+    if not (os.environ.get("GENSHIN_WEB_WRITE_PASSWORD") or "").strip():
+        print(
+            "ERRORE FATALE: in produzione serve GENSHIN_WEB_WRITE_PASSWORD. "
+            "In locale puoi ometterla; per forzarla ovunque usa GENSHIN_WEB_FORCE_PASSWORD=1.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
 
 _require_web_password_or_exit()
@@ -446,7 +460,7 @@ def page_istruzioni():
 
 @app.route("/login.html")
 def page_login():
-    return redirect("/personaggio.html")
+    return send_from_directory(app.static_folder, "login.html")
 
 
 @app.route("/sfondi/<path:filename>")

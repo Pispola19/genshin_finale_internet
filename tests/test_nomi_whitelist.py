@@ -1,9 +1,13 @@
 """Whitelist nomi personaggio, arma, manufatti."""
 from __future__ import annotations
 
+import os
+import sqlite3
+import tempfile
 import unittest
 
 from core.nome_normalization import canonicalizza_nome_personaggio, norm_key_nome
+from db.connection import init_databases
 from core.validation import (
     validate_arma_nome,
     validate_artefatto_set_e_pezzo,
@@ -12,6 +16,27 @@ from core.validation import (
 
 
 class NomiWhitelistTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.mkdtemp()
+        self.path_m = os.path.join(self._tmpdir, "main.db")
+        self.path_a = os.path.join(self._tmpdir, "art.db")
+        self.cm = sqlite3.connect(self.path_m)
+        self.ca = sqlite3.connect(self.path_a)
+        init_databases(self.cm, self.ca)
+
+    def tearDown(self) -> None:
+        self.cm.close()
+        self.ca.close()
+        for p in (self.path_m, self.path_a):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+        try:
+            os.rmdir(self._tmpdir)
+        except OSError:
+            pass
+
     def test_personaggio_fuori_lista_rifiutato(self) -> None:
         ok, msg = validate_nome("Personaggio Inventato")
         self.assertFalse(ok)
@@ -54,6 +79,7 @@ class NomiWhitelistTest(unittest.TestCase):
             "Emblema del fato spezzato",
             "Tsuba poderosa",
             "fiore",
+            conn_art=self.ca,
         )
         self.assertTrue(ok)
         self.assertEqual(msg, "")
@@ -63,12 +89,16 @@ class NomiWhitelistTest(unittest.TestCase):
             "Emblema del fato spezzato",
             "Tsuba poderosa",
             "piuma",
+            conn_art=self.ca,
         )
         self.assertFalse(ok)
 
     def test_manufatto_set_inventato(self) -> None:
-        ok, msg = validate_artefatto_set_e_pezzo("Set che non esiste", "Pezzo", "fiore")
-        self.assertFalse(ok)
+        ok, msg = validate_artefatto_set_e_pezzo(
+            "Set che non esiste", "Pezzo", "fiore", conn_art=self.ca
+        )
+        self.assertTrue(ok)
+        self.assertEqual(msg, "")
 
 
 if __name__ == "__main__":

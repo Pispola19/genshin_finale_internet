@@ -35,8 +35,8 @@
 
       <h2>Sicurezza sul web (Internet)</h2>
       <p>Il <strong>codice</strong> del sito non può essere “riscritto” da visitatori casuali: lo aggiorni solo tu da <strong>GitHub</strong> e <strong>Render</strong> (account protetti con password e, se puoi, autenticazione a due fattori).</p>
-      <p>In questa versione il login web è disattivato: l’app apre direttamente le pagine operative senza passaggi di autenticazione.</p>
-      <p class="page-hint">Nota: la protezione degli accessi applicativi è temporaneamente rimossa finché non verrà reintrodotto un flusso login stabile.</p>
+      <p>Per evitare che <strong>chiunque</strong> con l’URL modifichi o cancelli i dati nel database, l’amministratore può impostare su Render la variabile <strong>GENSHIN_WEB_WRITE_PASSWORD</strong>. Dopo di che, <strong>Salva</strong>, <strong>Import JSON</strong> e le modifiche ai <strong>Manufatti</strong> aprono la pagina di <a href="login.html">accesso modifiche</a> (URL diretto: <code>login.html</code>). La password <strong>non</strong> è nel JavaScript pubblico: resta solo sul server; il browser usa un cookie di sessione sicuro.</p>
+      <p class="page-hint">Senza quella variabile, il sito resta comodo in locale ma chiunque trovi l’indirizzo può ancora scrivere nel database. <strong>SECRET_KEY</strong> (già consigliata su Render) serve a firmare la sessione.</p>
 
       <h2>1) Iniziare</h2>
       <ul style="line-height:1.65;margin-left:1.2rem">
