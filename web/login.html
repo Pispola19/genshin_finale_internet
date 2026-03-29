@@ -24,7 +24,7 @@
 
   <div class="page-personaggio">
     <main class="personaggio-main section" style="max-width: 28rem; margin: 2rem auto;">
-      <h1 style="margin-bottom: 0.5rem;">Accesso</h1>
+      <h1 style="margin-bottom: 0.5rem;">Accesso per modifiche</h1>
       <p id="authHint" class="page-hint" style="margin-bottom: 1.25rem;"></p>
       <form id="loginForm" class="section" style="padding: 1.25rem;">
         <div class="form-group">
@@ -68,7 +68,8 @@
       form.style.display = "none";
       const base = document.createElement("span");
       base.innerHTML =
-        "Modalità <strong>locale</strong>: password non configurata — puoi usare subito Personaggio e Manufatti senza login.";
+        "Accesso <strong>libero</strong> (login applicativo spento): puoi consultare e modificare senza questo passaggio. " +
+        "Su Render l’avvio può richiedere comunque <strong>GENSHIN_WEB_WRITE_PASSWORD</strong>; per attivare anche il gate sulle modifiche imposta <strong>GENSHIN_WEB_AUTH_ENABLED=1</strong>.";
       hint.appendChild(base);
       const br = document.createElement("br");
       const a = document.createElement("a");
@@ -82,13 +83,13 @@
     form.style.display = "block";
     const base = document.createElement("span");
     base.innerHTML =
-      "Inserisci la <strong>password web</strong> (unica per questa installazione) per <strong>vedere e modificare</strong> tutti i dati: personaggi, manufatti, dashboard e build. " +
-      "Senza sessione valida le API non restituiscono dati. La password non è nel JavaScript pubblico.";
+      "La <strong>lettura</strong> del sito non richiede login. Inserisci la password solo per <strong>salvare o eliminare</strong> dati (Salva, manufatti, ecc.). " +
+      "La password non è nel JavaScript pubblico.";
     hint.appendChild(base);
     if (d.authenticated) {
       const br = document.createElement("br");
       const ok = document.createElement("span");
-      ok.textContent = "Sessione attiva. ";
+      ok.textContent = "Sessione attiva per le modifiche. ";
       const a = document.createElement("a");
       a.href = nextUrl;
       a.textContent = "Continua al sito";

@@ -1,13 +1,15 @@
 """
-Stress HTTP: cartella web (Flask). API dati richiedono sessione.
+Stress HTTP: cartella web (Flask). Con GENSHIN_WEB_WRITE_PASSWORD, le GET sono pubbliche;
+POST/PUT/DELETE richiedono sessione (vedi web.web_write_auth).
 """
 from __future__ import annotations
 
 import os
 import unittest
 
-# Sessione protetta come in produzione quando la password è impostata.
+# Gate scritture attivo per questo modulo di test.
 os.environ.setdefault("GENSHIN_WEB_WRITE_PASSWORD", "web-api-stress-test-secret")
+os.environ.setdefault("GENSHIN_WEB_AUTH_ENABLED", "1")
 
 from web.web_write_auth import SESSION_WRITE_KEY
 
@@ -151,11 +153,19 @@ class WebApiStressTest(unittest.TestCase):
         self.assertIn("ranking", j)
         self.assertIsInstance(j["ranking"], list)
 
-    def test_api_get_requires_session(self) -> None:
+    def test_api_get_public_without_session(self) -> None:
         from web.app import app
 
         naked = app.test_client()
         r = naked.get("/api/personaggi")
+        self.assertEqual(r.status_code, 200)
+        self.assertIsInstance(r.get_json(), list)
+
+    def test_api_post_requires_session(self) -> None:
+        from web.app import app
+
+        naked = app.test_client()
+        r = naked.post("/api/personaggio", json={"id": None, "personaggio": {"nome": "x"}})
         self.assertEqual(r.status_code, 401)
         self.assertEqual((r.get_json() or {}).get("code"), "auth_required")
 

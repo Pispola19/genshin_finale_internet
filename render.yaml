@@ -12,9 +12,11 @@ services:
         value: "3.11.9"
       - key: SECRET_KEY
         generateValue: true
-      # OBBLIGATORIA: senza di essa il servizio non si avvia. Password unica (lettura + scrittura API).
+      # OBBLIGATORIA IN PRODUZIONE: senza di essa il servizio non si avvia (vedi web.app).
       # In Render → Environment aggiungi manualmente (non committare nel repo):
-      #   GENSHIN_WEB_WRITE_PASSWORD = password lunga nota solo a chi deve usare l’app
+      #   GENSHIN_WEB_WRITE_PASSWORD = segreto noto agli amministratori
+      # Gate login / protezione scritture (opzionale, fase successiva):
+      #   GENSHIN_WEB_AUTH_ENABLED = 1   # solo con questo le API di scrittura richiedono login
       # Cookie sessione HTTPS: RENDER attiva SESSION_COOKIE_SECURE in app.
       # Opzionale: monta un Disco e punta i DB persistenti:
       # - key: GINSHIN_DATA_DIR

@@ -11,12 +11,14 @@ from web.web_write_auth import (
     SESSION_WRITE_KEY,
     password_matches,
     require_web_auth,
+    web_auth_enabled,
     write_password_configured,
+    write_password_present,
 )
 
 
 def _deploy_requires_web_password() -> bool:
-    """In produzione (Render) o se forzato, la password è obbligatoria all’avvio."""
+    """In produzione (Render) o se forzato, la password è obbligatoria all'avvio."""
     if (os.environ.get("RENDER") or "").strip():
         return True
     return (os.environ.get("GENSHIN_WEB_FORCE_PASSWORD") or "").strip().lower() in (
@@ -39,7 +41,21 @@ def _require_web_password_or_exit() -> None:
         sys.exit(2)
 
 
-_require_web_password_or_exit()
+class _WebPasswordEnvCheckMiddleware:
+    """Esegue il controllo env sul primo traffico WSGI, non all'import del modulo (compat Gunicorn/Render)."""
+
+    __slots__ = ("_app", "_done")
+
+    def __init__(self, wsgi_app):
+        self._app = wsgi_app
+        self._done = False
+
+    def __call__(self, environ, start_response):
+        if not self._done:
+            self._done = True
+            _require_web_password_or_exit()
+        return self._app(environ, start_response)
+
 
 ROOT = PROJECT_ROOT
 
@@ -62,6 +78,7 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = _is_production
 
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+app.wsgi_app = _WebPasswordEnvCheckMiddleware(app.wsgi_app)
 
 SFONDI_DIR = ROOT / "sfondi"
 
@@ -96,10 +113,16 @@ def get_service():
 @app.route("/api/auth/status")
 def api_auth_status():
     need = write_password_configured()
+    raw_auth = os.environ.get("GENSHIN_WEB_AUTH_ENABLED")
     return jsonify(
         {
             "write_auth_required": need,
             "authenticated": session.get(SESSION_WRITE_KEY) is True,
+            "web_auth_enabled_env": web_auth_enabled(),
+            "write_password_present_env": write_password_present(),
+            # Se manca in risposta, il deploy non è su questa versione (commit con gate separato).
+            "auth_status_schema": 2,
+            "genshin_web_auth_enabled_raw_length": len(raw_auth) if raw_auth is not None else None,
         }
     )
 

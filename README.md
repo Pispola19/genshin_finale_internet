@@ -17,12 +17,15 @@ Applicazione locale per personaggi, manufatti e build (Flask + browser).
 
 ```bash
 export GENSHIN_WEB_WRITE_PASSWORD='scegli-una-password-lunga'
+# Opzionale: export GENSHIN_WEB_AUTH_ENABLED=1   # attiva login + gate sulle sole scritture API
 python3 run_web.py
 ```
 
-Senza **`GENSHIN_WEB_WRITE_PASSWORD`** il server **non parte** (protezione dati). Apri nel browser l’URL mostrato in console (es. `http://127.0.0.1:5001/`), passa da **`login.html`**, poi `dashboard.html`, `personaggio.html`, ecc.
+Su **Render** (o con `GENSHIN_WEB_FORCE_PASSWORD=1`), senza **`GENSHIN_WEB_WRITE_PASSWORD`** il processo **non parte**. Quella variabile **non** attiva da sola il login in app: con **`GENSHIN_WEB_AUTH_ENABLED=1`** le scritture (POST/PUT/DELETE) richiedono sessione dopo **`login.html`**; le GET restano pubbliche. Con il flag assente/spento, accesso e modifiche sono libere anche se la password di avvio è impostata.
 
-**Sicurezza (single-user):** una password per installazione; tutte le API dati richiedono login. Nessun multi-tenant nel database.
+In **locale**, senza forzare la password, il server può partire senza `GENSHIN_WEB_WRITE_PASSWORD` (vedi `web.app`).
+
+**Sicurezza (single-user):** quando il flag auth è attivo, una password per installazione e gate solo sulle operazioni di modifica. Nessun multi-tenant nel database.
 
 ## Avvio macOS
 
@@ -36,7 +39,8 @@ Doppio clic su **`Genshin_Manager.command`** o **`Genshin Manager — progetto.c
 
 | Variabile | Effetto |
 |-----------|---------|
-| `GENSHIN_WEB_WRITE_PASSWORD` | **Obbligatoria.** Password unica; lettura e scrittura API dopo login. |
+| `GENSHIN_WEB_WRITE_PASSWORD` | Obbligatoria con `RENDER` (o `GENSHIN_WEB_FORCE_PASSWORD`): avvio del servizio. Non attiva il login da sola. |
+| `GENSHIN_WEB_AUTH_ENABLED` | `1` / `true` / `yes`: attiva login applicativo e protezione **solo** delle scritture API (GET libere). |
 | `SECRET_KEY` | Firmare cookie sessione (in produzione impostala tu; su Render può essere generata). |
 | `PORT` | Porta del server (es. su hosting). |
 | `GENSHIN_MAIN_NO_SLEEP=1` | Nessuna pausa quando si lancia tramite `main.py`. |
